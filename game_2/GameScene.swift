@@ -1,6 +1,6 @@
 //
 //  GameScene.swift
-//  game_2
+//  Glow Bounce
 //
 //  Created by Artem Prischepov on 1.05.26.
 //
@@ -523,7 +523,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         addChild(menuOverlay)
         overlayNode = menuOverlay
 
-        let titleLabel = makeLabel(text: "NEON PADDLE", size: titleFontSize, weight: .bold)
+        let titleLabel = makeLabel(text: "GLOW BOUNCE", size: titleFontSize, weight: .bold)
         titleLabel.alpha = 0.94
         titleLabel.position = CGPoint(x: safeFrame.midX, y: safeFrame.midY + min(72, safeFrame.height * 0.18))
         menuOverlay.addChild(titleLabel)

@@ -1,6 +1,6 @@
 //
 //  AppDelegate.swift
-//  game_2
+//  Glow Bounce
 //
 //  Created by Artem Prischepov on 1.05.26.
 //
