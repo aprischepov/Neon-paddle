@@ -8,21 +8,22 @@
 import SpriteKit
 import UIKit
 import CoreImage
+import AVFoundation
 
 final class SoundManager {
     static let shared = SoundManager()
 
     static let soundEnabledKey = "soundEnabled"
 
-    private weak var hostNode: SKNode?
     private let defaults: UserDefaults
+    private var players: [String: AVAudioPlayer] = [:]
 
     private init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
     }
 
     func configure(hostNode: SKNode) {
-        self.hostNode = hostNode
+        preloadSounds()
     }
 
     func playHitSound() {
@@ -33,13 +34,35 @@ final class SoundManager {
         playSoundFileNamed("score.wav")
     }
 
+    func preloadSounds() {
+        ["hit.wav", "score.wav"].forEach { fileName in
+            guard players[fileName] == nil else { return }
+            guard let url = Bundle.main.url(forResource: fileName, withExtension: nil) else { return }
+
+            do {
+                let player = try AVAudioPlayer(contentsOf: url)
+                player.prepareToPlay()
+                players[fileName] = player
+            } catch {
+                players[fileName] = nil
+            }
+        }
+    }
+
     private var isSoundEnabled: Bool {
         defaults.object(forKey: Self.soundEnabledKey) as? Bool ?? true
     }
 
     private func playSoundFileNamed(_ fileName: String) {
         guard isSoundEnabled else { return }
-        hostNode?.run(.playSoundFileNamed(fileName, waitForCompletion: false))
+
+        if players[fileName] == nil {
+            preloadSounds()
+        }
+
+        guard let player = players[fileName] else { return }
+        player.currentTime = 0
+        player.play()
     }
 }
 
@@ -151,12 +174,13 @@ final class FieldObject: SKShapeNode {
 class GameScene: SKScene, SKPhysicsContactDelegate {
     private enum GameState {
         case start
+        case settings
         case playing
         case paused
         case gameOver
     }
 
-    private enum AIDifficulty: CaseIterable {
+    private enum AIDifficulty: Int, CaseIterable {
         case easy
         case normal
         case hard
@@ -184,6 +208,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
 
+    private enum GameMode: Int, CaseIterable {
+        case classic
+        case powerUps
+
+        var title: String {
+            switch self {
+            case .classic:
+                return "Classic"
+            case .powerUps:
+                return "Power-Ups"
+            }
+        }
+    }
+
     private enum BallOwner {
         case player
         case enemy
@@ -199,10 +237,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private enum NodeName {
         static let playButton = "playButton"
+        static let settingsButton = "settingsButton"
+        static let backButton = "backButton"
         static let difficultyLeft = "difficultyLeft"
         static let difficultyRight = "difficultyRight"
-        static let scoreLimitLeft = "scoreLimitLeft"
-        static let scoreLimitRight = "scoreLimitRight"
+        static let gameModeLeft = "gameModeLeft"
+        static let gameModeRight = "gameModeRight"
+        static let privacyButton = "privacyButton"
+        static let termsButton = "termsButton"
         static let menuButton = "menuButton"
         static let pauseButton = "pauseButton"
         static let resumeButton = "resumeButton"
@@ -210,11 +252,30 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         static let playAgainButton = "playAgainButton"
     }
 
-    private let paddleSize = CGSize(width: 140, height: 18)
-    private let enemyPaddleSize = CGSize(width: 120, height: 16)
-    private let ballRadius: CGFloat = 16
-    private let paddleBottomOffset: CGFloat = 72
-    private let enemyPaddleTopOffset: CGFloat = 72
+    private var paddleSize: CGSize {
+        let width = isLandscapeLayout
+            ? min(max(safeFrame.width * 0.24, 150), 230)
+            : min(max(safeFrame.width * 0.36, 128), 160)
+        return CGSize(width: width, height: isLandscapeLayout ? 16 : 18)
+    }
+
+    private var enemyPaddleSize: CGSize {
+        let playerSize = paddleSize
+        return CGSize(width: playerSize.width * 0.86, height: max(playerSize.height - 2, 14))
+    }
+
+    private var ballRadius: CGFloat {
+        isLandscapeLayout ? 13 : 16
+    }
+
+    private var paddleBottomOffset: CGFloat {
+        isLandscapeLayout ? min(max(safeFrame.height * 0.13, 38), 56) : 72
+    }
+
+    private var enemyPaddleTopOffset: CGFloat {
+        paddleBottomOffset
+    }
+
     private let difficultyInterval = 10
     private let backgroundChangeInterval = 5
     private let obstacleInterval = 15
@@ -240,7 +301,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var fieldObjects: [FieldObject] = []
     private var scoreboardLabel: SKLabelNode?
     private var difficultyValueLabel: SKLabelNode?
-    private var scoreLimitValueLabel: SKLabelNode?
+    private var gameModeValueLabel: SKLabelNode?
     private var overlayNode: SKNode?
     private var startTime: TimeInterval = 0
     private var lastUpdateTime: TimeInterval = 0
@@ -252,6 +313,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var targetPaddleX: CGFloat?
     private var paddleVelocityX: CGFloat = 0
     private var selectedDifficulty: AIDifficulty = .normal
+    private var selectedGameMode: GameMode = .powerUps
     private var selectedScoreLimit = 11
     private var lastBallOwner: BallOwner?
     private var pausedBallVelocity: CGVector?
@@ -264,6 +326,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var enemyScore = 0
     private var currentScore = 0
     private var gameState: GameState = .start
+    private var hasPresentedInitialLayout = false
+    private var lastLayoutSafeFrame: CGRect = .zero
 
     private let backgroundColors: [UIColor] = [
         UIColor(red: 0.071, green: 0.071, blue: 0.071, alpha: 1),
@@ -276,7 +340,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         physicsWorld.gravity = .zero
         physicsWorld.contactDelegate = self
         SoundManager.shared.configure(hostNode: self)
+        loadSettings()
         showStartScreen()
+    }
+
+    override func didChangeSize(_ oldSize: CGSize) {
+        super.didChangeSize(oldSize)
+
+        guard view != nil else { return }
+
+        if !hasPresentedInitialLayout {
+            hasPresentedInitialLayout = true
+            lastLayoutSafeFrame = safeFrame
+            return
+        }
+
+        relayoutSceneForCurrentSize()
     }
 
     private var safeFrame: CGRect {
@@ -289,6 +368,142 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             width: frame.width - insets.left - insets.right,
             height: frame.height - insets.top - insets.bottom
         )
+    }
+
+    private var isLandscapeLayout: Bool {
+        safeFrame.width > safeFrame.height
+    }
+
+    private var titleFontSize: CGFloat {
+        isLandscapeLayout ? min(max(safeFrame.height * 0.12, 34), 44) : 44
+    }
+
+    private var scoreboardFontSize: CGFloat {
+        isLandscapeLayout ? min(max(safeFrame.height * 0.22, 70), 92) : 124
+    }
+
+    private func relayoutSceneForCurrentSize() {
+        let previousSafeFrame = lastLayoutSafeFrame == .zero ? safeFrame : lastLayoutSafeFrame
+
+        switch gameState {
+        case .start:
+            showStartScreen()
+        case .settings:
+            showSettingsScreen()
+        case .playing:
+            rebuildPlayingSceneForCurrentLayout(previousSafeFrame: previousSafeFrame)
+        case .paused:
+            let velocity = pausedBallVelocity ?? ball?.physicsBody?.velocity
+            rebuildPlayingSceneForCurrentLayout(previousSafeFrame: previousSafeFrame, velocityOverride: velocity)
+            pausedBallVelocity = velocity
+            showPauseMenu()
+        case .gameOver:
+            let winner: BallOwner = playerScore >= enemyScore ? .player : .enemy
+            rebuildPlayingSceneForCurrentLayout(previousSafeFrame: previousSafeFrame, velocityOverride: .zero)
+            showMatchOver(winner: winner)
+        }
+
+        lastLayoutSafeFrame = safeFrame
+    }
+
+    private func rebuildPlayingSceneForCurrentLayout(
+        previousSafeFrame: CGRect,
+        velocityOverride: CGVector? = nil
+    ) {
+        let wasCountingDown = isCountingDown
+        let savedPlayerScore = playerScore
+        let savedEnemyScore = enemyScore
+        let savedCurrentScore = currentScore
+        let savedStartTime = startTime
+        let savedLastUpdateTime = lastUpdateTime
+        let savedDifficultyStep = lastDifficultyStep
+        let savedBackgroundStep = lastBackgroundStep
+        let savedObstacleStep = lastObstacleStep
+        let savedLastOwner = lastBallOwner
+        let savedBallTouchedBy = ball?.lastTouchedBy ?? "Player"
+        let savedPlayerHasShield = playerHasShield
+        let savedEnemyHasShield = enemyHasShield
+        let savedPlayerIsDebuffed = playerIsDebuffed
+        let savedEnemyIsDebuffed = enemyIsDebuffed
+        let savedVelocity = velocityOverride ?? ball?.physicsBody?.velocity ?? .zero
+        let defaultBallPosition = CGPoint(x: safeFrame.midX, y: safeFrame.midY)
+        let normalizedBallPosition = normalizedPoint(ball?.position ?? defaultBallPosition, in: previousSafeFrame)
+
+        removeAllChildren()
+        clearGameReferences()
+        physicsWorld.speed = 1
+        gameState = .playing
+
+        playerScore = savedPlayerScore
+        enemyScore = savedEnemyScore
+        currentScore = savedCurrentScore
+        startTime = savedStartTime
+        lastUpdateTime = savedLastUpdateTime
+        lastDifficultyStep = savedDifficultyStep
+        lastBackgroundStep = savedBackgroundStep
+        lastObstacleStep = savedObstacleStep
+        lastBallOwner = savedLastOwner
+        playerHasShield = savedPlayerHasShield
+        enemyHasShield = savedEnemyHasShield
+        playerIsDebuffed = savedPlayerIsDebuffed
+        enemyIsDebuffed = savedEnemyIsDebuffed
+
+        createWorldNode()
+        setupBackground()
+        createScreenBoundaries()
+        createPaddle()
+        createEnemyPaddle()
+        createBall()
+        createScoreLabel()
+        createPauseButton()
+
+        ball?.position = clampedBallPosition(point(from: normalizedBallPosition, in: safeFrame))
+        ball?.lastTouchedBy = savedBallTouchedBy
+        setBallOwnerColor(savedBallTouchedBy == "AI" ? .enemy : .player)
+        updatePaddleScale(for: .player)
+        updatePaddleScale(for: .enemy)
+
+        if wasCountingDown {
+            startCountdown { [weak self] in
+                self?.launchBall(with: self?.makeRandomStartVelocity() ?? .zero)
+                self?.schedulePowerUpsIfNeeded()
+            }
+        } else if isZeroVelocity(savedVelocity) {
+            ball?.physicsBody?.velocity = .zero
+            ballTrail?.particleBirthRate = 0
+        } else {
+            launchBall(with: limitedVelocity(savedVelocity))
+            schedulePowerUpsIfNeeded(delay: 1.0)
+        }
+    }
+
+    private func normalizedPoint(_ point: CGPoint, in rect: CGRect) -> CGPoint {
+        guard rect.width > 0, rect.height > 0 else {
+            return CGPoint(x: 0.5, y: 0.5)
+        }
+
+        return CGPoint(
+            x: min(max((point.x - rect.minX) / rect.width, 0), 1),
+            y: min(max((point.y - rect.minY) / rect.height, 0), 1)
+        )
+    }
+
+    private func point(from normalizedPoint: CGPoint, in rect: CGRect) -> CGPoint {
+        CGPoint(
+            x: rect.minX + rect.width * normalizedPoint.x,
+            y: rect.minY + rect.height * normalizedPoint.y
+        )
+    }
+
+    private func clampedBallPosition(_ position: CGPoint) -> CGPoint {
+        CGPoint(
+            x: min(max(position.x, safeFrame.minX + ballRadius), safeFrame.maxX - ballRadius),
+            y: min(max(position.y, safeFrame.minY + ballRadius), safeFrame.maxY - ballRadius)
+        )
+    }
+
+    private func isZeroVelocity(_ velocity: CGVector) -> Bool {
+        abs(velocity.dx) < 0.001 && abs(velocity.dy) < 0.001
     }
 
     private func showStartScreen() {
@@ -308,15 +523,96 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         addChild(menuOverlay)
         overlayNode = menuOverlay
 
-        let titleLabel = makeLabel(text: "NEON PADDLE", size: 44, weight: .bold)
+        let titleLabel = makeLabel(text: "NEON PADDLE", size: titleFontSize, weight: .bold)
         titleLabel.alpha = 0.94
-        titleLabel.position = CGPoint(x: safeFrame.midX, y: safeFrame.midY + 72)
+        titleLabel.position = CGPoint(x: safeFrame.midX, y: safeFrame.midY + min(72, safeFrame.height * 0.18))
         menuOverlay.addChild(titleLabel)
 
         let playButton = makeButton(title: "START", name: NodeName.playButton)
-        playButton.position = CGPoint(x: safeFrame.midX, y: safeFrame.midY - 34)
+        playButton.position = CGPoint(
+            x: safeFrame.midX,
+            y: safeFrame.midY - (isLandscapeLayout ? min(18, safeFrame.height * 0.06) : 34)
+        )
         menuOverlay.addChild(playButton)
+
+        let settingsButton = makeButton(title: "SETTINGS", name: NodeName.settingsButton)
+        settingsButton.setScale(0.84)
+        settingsButton.alpha = 0.84
+        settingsButton.position = CGPoint(
+            x: safeFrame.midX,
+            y: playButton.position.y - (isLandscapeLayout ? 56 : 70)
+        )
+        menuOverlay.addChild(settingsButton)
+
         menuOverlay.run(.fadeIn(withDuration: 0.3))
+        hasPresentedInitialLayout = true
+        lastLayoutSafeFrame = safeFrame
+    }
+
+    private func showSettingsScreen() {
+        isPaused = false
+        removeAllChildren()
+        clearGameReferences()
+        physicsWorld.speed = 0
+        gameState = .settings
+        createWorldNode()
+        setupBackground()
+        createBlurredBackdrop(zPosition: 60)
+
+        let safeFrame = self.safeFrame
+        let settingsOverlay = SKNode()
+        settingsOverlay.zPosition = 90
+        settingsOverlay.alpha = 0
+        addChild(settingsOverlay)
+        overlayNode = settingsOverlay
+
+        let titleLabel = makeLabel(text: "SETTINGS", size: isLandscapeLayout ? 34 : 40, weight: .bold)
+        titleLabel.alpha = 0.94
+        titleLabel.position = CGPoint(x: safeFrame.midX, y: safeFrame.midY + (isLandscapeLayout ? 104 : 170))
+        settingsOverlay.addChild(titleLabel)
+
+        createSettingsPicker(
+            title: "Difficulty",
+            value: selectedDifficulty.title,
+            y: safeFrame.midY + (isLandscapeLayout ? 42 : 88),
+            leftName: NodeName.difficultyLeft,
+            rightName: NodeName.difficultyRight,
+            in: settingsOverlay
+        ) { [weak self] label in
+            self?.difficultyValueLabel = label
+        }
+
+        createSettingsPicker(
+            title: "Mode",
+            value: selectedGameMode.title,
+            y: safeFrame.midY + (isLandscapeLayout ? -26 : 6),
+            leftName: NodeName.gameModeLeft,
+            rightName: NodeName.gameModeRight,
+            in: settingsOverlay
+        ) { [weak self] label in
+            self?.gameModeValueLabel = label
+        }
+
+        let legalY = safeFrame.midY + (isLandscapeLayout ? -96 : -88)
+        let privacyButton = makeButton(title: "PRIVACY", name: NodeName.privacyButton)
+        privacyButton.setScale(0.76)
+        privacyButton.position = CGPoint(x: safeFrame.midX - 78, y: legalY)
+        settingsOverlay.addChild(privacyButton)
+
+        let termsButton = makeButton(title: "TERMS", name: NodeName.termsButton)
+        termsButton.setScale(0.76)
+        termsButton.position = CGPoint(x: safeFrame.midX + 78, y: legalY)
+        settingsOverlay.addChild(termsButton)
+
+        let backButton = makeButton(title: "BACK", name: NodeName.backButton)
+        backButton.setScale(0.78)
+        backButton.alpha = 0.84
+        backButton.position = CGPoint(x: safeFrame.midX, y: safeFrame.midY + (isLandscapeLayout ? -154 : -168))
+        settingsOverlay.addChild(backButton)
+
+        settingsOverlay.run(.fadeIn(withDuration: 0.3))
+        hasPresentedInitialLayout = true
+        lastLayoutSafeFrame = safeFrame
     }
 
     private func clearGameReferences() {
@@ -330,7 +626,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         worldNode = nil
         scoreboardLabel = nil
         difficultyValueLabel = nil
-        scoreLimitValueLabel = nil
+        gameModeValueLabel = nil
         overlayNode = nil
         pausedBallVelocity = nil
         isCountingDown = false
@@ -343,6 +639,33 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         removeAction(forKey: "playerDebuffRecovery")
         removeAction(forKey: "enemyDebuffRecovery")
         removeAction(forKey: "fieldObjectSpawnDelay")
+    }
+
+    private func loadSettings() {
+        let defaults = UserDefaults.standard
+
+        if defaults.object(forKey: SettingsKey.difficulty) == nil {
+            selectedDifficulty = .normal
+        } else if let difficulty = AIDifficulty(rawValue: defaults.integer(forKey: SettingsKey.difficulty)) {
+            selectedDifficulty = difficulty
+        }
+
+        if defaults.object(forKey: SettingsKey.gameMode) == nil {
+            selectedGameMode = .powerUps
+        } else if let gameMode = GameMode(rawValue: defaults.integer(forKey: SettingsKey.gameMode)) {
+            selectedGameMode = gameMode
+        }
+    }
+
+    private func saveSettings() {
+        let defaults = UserDefaults.standard
+        defaults.set(selectedDifficulty.rawValue, forKey: SettingsKey.difficulty)
+        defaults.set(selectedGameMode.rawValue, forKey: SettingsKey.gameMode)
+    }
+
+    private enum SettingsKey {
+        static let difficulty = "selectedDifficulty"
+        static let gameMode = "selectedGameMode"
     }
 
     private func createWorldNode() {
@@ -389,6 +712,38 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         rightArrow.name = rightName
         rightArrow.position = CGPoint(x: safeFrame.midX + 112, y: y - 2)
         addChild(rightArrow)
+    }
+
+    private func createSettingsPicker(
+        title: String,
+        value: String,
+        y: CGFloat,
+        leftName: String,
+        rightName: String,
+        in parent: SKNode,
+        valueHandler: (SKLabelNode) -> Void
+    ) {
+        let safeFrame = self.safeFrame
+        let titleLabel = makeLabel(text: title.uppercased(), size: isLandscapeLayout ? 12 : 13, weight: .semibold)
+        titleLabel.alpha = 0.58
+        titleLabel.position = CGPoint(x: safeFrame.midX, y: y + (isLandscapeLayout ? 23 : 28))
+        parent.addChild(titleLabel)
+
+        let arrowOffset = isLandscapeLayout ? min(safeFrame.width * 0.14, 124) : 112
+        let leftArrow = makeLabel(text: "<", size: isLandscapeLayout ? 30 : 34, weight: .bold)
+        leftArrow.name = leftName
+        leftArrow.position = CGPoint(x: safeFrame.midX - arrowOffset, y: y - 2)
+        parent.addChild(leftArrow)
+
+        let valueLabel = makeLabel(text: value, size: isLandscapeLayout ? 26 : 30, weight: .light)
+        valueLabel.position = CGPoint(x: safeFrame.midX, y: y)
+        parent.addChild(valueLabel)
+        valueHandler(valueLabel)
+
+        let rightArrow = makeLabel(text: ">", size: isLandscapeLayout ? 30 : 34, weight: .bold)
+        rightArrow.name = rightName
+        rightArrow.position = CGPoint(x: safeFrame.midX + arrowOffset, y: y - 2)
+        parent.addChild(rightArrow)
     }
 
     private func setupBackground() {
@@ -638,6 +993,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         lightImpactFeedback.prepare()
         heavyImpactFeedback.prepare()
+        prepareReusableAssets()
 
         createWorldNode()
         setupBackground()
@@ -649,8 +1005,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         createPauseButton()
         startCountdown { [weak self] in
             self?.launchBall(with: self?.makeRandomStartVelocity() ?? .zero)
-            self?.scheduleFieldObjectsForRound()
+            self?.schedulePowerUpsIfNeeded()
         }
+    }
+
+    private func prepareReusableAssets() {
+        _ = particleTexture
+        _ = trailTexture
+        _ = confettiTexture
+        _ = starTexture
+        SoundManager.shared.preloadSounds()
     }
 
     private func createPauseButton() {
@@ -671,11 +1035,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func createScreenBoundaries() {
         let playArea = safeFrame.insetBy(dx: ballRadius, dy: 8)
         addBoundary(
-            from: CGPoint(x: playArea.minX, y: frame.minY),
+            from: CGPoint(x: playArea.minX, y: safeFrame.minY),
             to: CGPoint(x: playArea.minX, y: playArea.maxY)
         )
         addBoundary(
-            from: CGPoint(x: playArea.maxX, y: frame.minY),
+            from: CGPoint(x: playArea.maxX, y: safeFrame.minY),
             to: CGPoint(x: playArea.maxX, y: playArea.maxY)
         )
     }
@@ -822,6 +1186,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         ]), withKey: "fieldObjectSpawnDelay")
     }
 
+    private func schedulePowerUpsIfNeeded(delay: TimeInterval = 2.0) {
+        guard selectedGameMode == .powerUps else {
+            clearFieldObjects()
+            removeAction(forKey: "fieldObjectSpawnDelay")
+            return
+        }
+
+        scheduleFieldObjectsForRound(delay: delay)
+    }
+
     private func randomFieldObjectPosition(in zone: CGRect, radius: CGFloat) -> CGPoint {
         let centerPoint = CGPoint(x: safeFrame.midX, y: safeFrame.midY)
 
@@ -935,7 +1309,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func createScoreLabel() {
         let safeFrame = self.safeFrame
-        let scoreboardLabel = makeScoreboardLabel(text: "", size: 124)
+        let scoreboardLabel = makeScoreboardLabel(text: "", size: scoreboardFontSize)
         scoreboardLabel.alpha = 0.22
         scoreboardLabel.zPosition = -30
         scoreboardLabel.position = CGPoint(x: safeFrame.midX, y: safeFrame.midY)
@@ -962,7 +1336,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let safeFrame = self.safeFrame
         createBlurredBackdrop(zPosition: 70)
 
-        let overlay = SKShapeNode(rectOf: CGSize(width: safeFrame.width - 36, height: 310), cornerRadius: 32)
+        let overlayHeight = isLandscapeLayout ? min(safeFrame.height - 28, 260) : 310
+        let overlay = SKShapeNode(rectOf: CGSize(width: safeFrame.width - 36, height: overlayHeight), cornerRadius: 32)
         overlay.fillColor = UIColor(white: 0.02, alpha: 0.92)
         overlay.strokeColor = winner == .player ? playerColor : enemyColor
         overlay.lineWidth = 3
@@ -972,27 +1347,32 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         addChild(overlay)
 
         let title = winner == .player ? "YOU WIN" : "YOU LOSE"
-        let resultLabel = makeScoreboardLabel(text: title, size: 40)
+        let resultLabel = makeScoreboardLabel(text: title, size: isLandscapeLayout ? 34 : 40)
         resultLabel.fontColor = winner == .player ? playerColor : enemyColor
-        resultLabel.position = CGPoint(x: 0, y: 88)
+        resultLabel.position = CGPoint(x: 0, y: isLandscapeLayout ? 58 : 88)
         resultLabel.zPosition = 1
         overlay.addChild(resultLabel)
 
-        let finalScoreLabel = makeScoreboardLabel(text: "\(playerScore):\(enemyScore)", size: 34)
+        let finalScoreLabel = makeScoreboardLabel(text: "\(playerScore):\(enemyScore)", size: isLandscapeLayout ? 30 : 34)
         finalScoreLabel.alpha = 0.9
-        finalScoreLabel.position = CGPoint(x: 0, y: 28)
+        finalScoreLabel.position = CGPoint(x: 0, y: isLandscapeLayout ? 12 : 28)
         finalScoreLabel.zPosition = 1
         overlay.addChild(finalScoreLabel)
 
         let playAgainButton = makeButton(title: "PLAY AGAIN", name: NodeName.playAgainButton)
-        playAgainButton.position = CGPoint(x: 0, y: -58)
+        if isLandscapeLayout {
+            playAgainButton.setScale(0.82)
+            playAgainButton.position = CGPoint(x: -92, y: -58)
+        } else {
+            playAgainButton.position = CGPoint(x: 0, y: -58)
+        }
         playAgainButton.zPosition = 1
         overlay.addChild(playAgainButton)
 
         let menuButton = makeButton(title: "Menu", name: NodeName.menuButton)
-        menuButton.setScale(0.78)
+        menuButton.setScale(isLandscapeLayout ? 0.82 : 0.78)
         menuButton.alpha = 0.78
-        menuButton.position = CGPoint(x: 0, y: -122)
+        menuButton.position = isLandscapeLayout ? CGPoint(x: 92, y: -58) : CGPoint(x: 0, y: -122)
         menuButton.zPosition = 1
         overlay.addChild(menuButton)
 
@@ -1007,6 +1387,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func showPauseMenu() {
         guard gameState == .playing else { return }
 
+        isPaused = false
         gameState = .paused
         physicsWorld.speed = 0
         pausedBallVelocity = ball?.physicsBody?.velocity
@@ -1021,7 +1402,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         createBlurredBackdrop(zPosition: 70)
 
-        let card = SKShapeNode(rectOf: CGSize(width: safeFrame.width - 48, height: 230), cornerRadius: 28)
+        let cardHeight = isLandscapeLayout ? min(safeFrame.height - 32, 210) : 230
+        let card = SKShapeNode(rectOf: CGSize(width: safeFrame.width - 48, height: cardHeight), cornerRadius: 28)
         card.fillColor = UIColor(white: 0.02, alpha: 0.9)
         card.strokeColor = playerColor
         card.lineWidth = 2
@@ -1113,6 +1495,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func spawnObstacleIfNeeded(score: Int) {
+        guard selectedGameMode == .powerUps else { return }
+
         let obstacleStep = score / obstacleInterval
         guard obstacleStep > lastObstacleStep else { return }
 
@@ -1125,8 +1509,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let obstacleSize = CGSize(width: 34, height: 34)
         let minX = safeFrame.minX + obstacleSize.width
         let maxX = safeFrame.maxX - obstacleSize.width
-        let minY = (paddle?.position.y ?? safeFrame.minY) + 120
-        let maxY = safeFrame.maxY - 90
+        let minY = (paddle?.position.y ?? safeFrame.minY) + (isLandscapeLayout ? 72 : 120)
+        let maxY = safeFrame.maxY - (isLandscapeLayout ? 64 : 90)
         guard minX < maxX, minY < maxY else { return }
 
         let obstacle = SKShapeNode(rectOf: obstacleSize, cornerRadius: 7)
@@ -1638,6 +2022,44 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                         self?.startGame()
                     }
                 }
+            } else if let button = buttonNode(from: touchedNode, named: NodeName.settingsButton) {
+                animateButtonPress(button) { [weak self] in
+                    self?.fadeOutActiveOverlay {
+                        self?.showSettingsScreen()
+                    }
+                }
+            }
+        } else if gameState == .settings {
+            if let button = buttonNode(from: touchedNode, named: NodeName.backButton) {
+                animateButtonPress(button) { [weak self] in
+                    self?.fadeOutActiveOverlay {
+                        self?.showStartScreen()
+                    }
+                }
+            } else if let button = buttonNode(from: touchedNode, named: NodeName.difficultyLeft) {
+                animateButtonPress(button) { [weak self] in
+                    self?.changeDifficulty(by: -1)
+                }
+            } else if let button = buttonNode(from: touchedNode, named: NodeName.difficultyRight) {
+                animateButtonPress(button) { [weak self] in
+                    self?.changeDifficulty(by: 1)
+                }
+            } else if let button = buttonNode(from: touchedNode, named: NodeName.gameModeLeft) {
+                animateButtonPress(button) { [weak self] in
+                    self?.changeGameMode(by: -1)
+                }
+            } else if let button = buttonNode(from: touchedNode, named: NodeName.gameModeRight) {
+                animateButtonPress(button) { [weak self] in
+                    self?.changeGameMode(by: 1)
+                }
+            } else if let button = buttonNode(from: touchedNode, named: NodeName.privacyButton) {
+                animateButtonPress(button) { [weak self] in
+                    self?.openPolicyPage(title: "Privacy Policy", url: AppConstants.Legal.privacyPolicyURL)
+                }
+            } else if let button = buttonNode(from: touchedNode, named: NodeName.termsButton) {
+                animateButtonPress(button) { [weak self] in
+                    self?.openPolicyPage(title: "Terms of Use", url: AppConstants.Legal.termsOfUseURL)
+                }
             }
         } else if gameState == .playing {
             if !isCountingDown, let button = buttonNode(from: touchedNode, named: NodeName.pauseButton) {
@@ -1684,11 +2106,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let newIndex = (currentIndex + offset + difficulties.count) % difficulties.count
         selectedDifficulty = difficulties[newIndex]
         difficultyValueLabel?.text = selectedDifficulty.title
+        saveSettings()
     }
 
-    private func changeScoreLimit(by offset: Int) {
-        selectedScoreLimit = min(max(selectedScoreLimit + offset, 5), 24)
-        scoreLimitValueLabel?.text = "\(selectedScoreLimit)"
+    private func changeGameMode(by offset: Int) {
+        let modes = GameMode.allCases
+        guard let currentIndex = modes.firstIndex(of: selectedGameMode) else { return }
+
+        let newIndex = (currentIndex + offset + modes.count) % modes.count
+        selectedGameMode = modes[newIndex]
+        gameModeValueLabel?.text = selectedGameMode.title
+        saveSettings()
+    }
+
+    private func openPolicyPage(title: String, url: URL) {
+        guard let viewController = view?.window?.rootViewController else { return }
+
+        let policyViewController = PolicyWebViewController(title: title, url: url)
+        let navigationController = UINavigationController(rootViewController: policyViewController)
+        navigationController.modalPresentationStyle = .fullScreen
+        viewController.present(navigationController, animated: true)
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -1737,10 +2174,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         enemyPaddle.position.x += min(max(distance, -maxStep), maxStep)
     }
 
+    private var playerGoalLine: CGFloat {
+        let paddleY = paddle?.position.y ?? safeFrame.minY + paddleBottomOffset
+        return paddleY - paddleSize.height / 2 - ballRadius * 0.35
+    }
+
+    private var enemyGoalLine: CGFloat {
+        let enemyPaddleY = enemyPaddle?.position.y ?? safeFrame.maxY - enemyPaddleTopOffset
+        return enemyPaddleY + enemyPaddleSize.height / 2 + ballRadius * 0.35
+    }
+
     private func handleGoalIfNeeded() {
         guard let ball else { return }
 
-        if ball.position.y - ballRadius > safeFrame.maxY {
+        if ball.position.y > enemyGoalLine {
             playerScore += 1
             SoundManager.shared.playScoreSound()
             screenShake(intensity: 10)
@@ -1753,7 +2200,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             if gameState == .playing {
                 resetBallAfterGoal(directionY: -1)
             }
-        } else if ball.position.y + ballRadius < safeFrame.minY {
+        } else if ball.position.y < playerGoalLine {
             enemyScore += 1
             SoundManager.shared.playScoreSound()
             screenShake(intensity: 10)
@@ -1779,7 +2226,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         lastBallOwner = nil
         setBallOwnerColor(directionY > 0 ? .player : .enemy)
         ball.lastTouchedBy = directionY > 0 ? "Player" : "AI"
-        scheduleFieldObjectsForRound()
+        schedulePowerUpsIfNeeded()
 
         let speed: CGFloat = 340
         let angle = CGFloat.random(in: 35...145) * .pi / 180
