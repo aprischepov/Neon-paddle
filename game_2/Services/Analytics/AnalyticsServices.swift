@@ -11,6 +11,8 @@ enum AnalyticsServices {
     }
 
     static func applicationDidBecomeActive() {
-        AppsFlyerAttributionService.shared.startSession()
+        AppTrackingService.requestAuthorizationThen {
+            AppsFlyerAttributionService.shared.startSession()
+        }
     }
 }

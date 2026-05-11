@@ -276,6 +276,7 @@
 				DEVELOPMENT_TEAM = C4QZKCN6PP;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Glow Bounce";
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "This identifier is used to measure ad performance and partner analytics (AppsFlyer).";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -314,6 +315,7 @@
 				DEVELOPMENT_TEAM = C4QZKCN6PP;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Glow Bounce";
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "This identifier is used to measure ad performance and partner analytics (AppsFlyer).";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
