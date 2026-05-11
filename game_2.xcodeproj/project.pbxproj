@@ -6,8 +6,15 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		53701DFF2FB1D02100A9A5E6 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5349A7A02FA4CC2E0012EED6 /* FirebaseCore */; };
+		53701E002FB1D02100A9A5E6 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 5349A7A12FA4CC2E0012EED6 /* FirebaseCrashlytics */; };
+		53701E012FB1D02100A9A5E6 /* AmplitudeSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 5349A7A22FA4CC2E0012EED6 /* AmplitudeSwift */; };
+		53701E022FB1D02100A9A5E6 /* AppsFlyerLib in Frameworks */ = {isa = PBXBuildFile; productRef = 5349A7A32FA4CC2E0012EED6 /* AppsFlyerLib */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
-		5349A7732FA4CC2E0012EED5 /* game_2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = game_2.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5349A7732FA4CC2E0012EED5 /* game_2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = game_2.app; path = "Glow Bounce.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -23,6 +30,10 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				53701E022FB1D02100A9A5E6 /* AppsFlyerLib in Frameworks */,
+				53701E012FB1D02100A9A5E6 /* AmplitudeSwift in Frameworks */,
+				53701E002FB1D02100A9A5E6 /* FirebaseCrashlytics in Frameworks */,
+				53701DFF2FB1D02100A9A5E6 /* FirebaseCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +76,10 @@
 			);
 			name = game_2;
 			packageProductDependencies = (
+				5349A7A02FA4CC2E0012EED6 /* FirebaseCore */,
+				5349A7A12FA4CC2E0012EED6 /* FirebaseCrashlytics */,
+				5349A7A22FA4CC2E0012EED6 /* AmplitudeSwift */,
+				5349A7A32FA4CC2E0012EED6 /* AppsFlyerLib */,
 			);
 			productName = game_2;
 			productReference = 5349A7732FA4CC2E0012EED5 /* game_2.app */;
@@ -94,6 +109,11 @@
 			);
 			mainGroup = 5349A76A2FA4CC2E0012EED5;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5349A7902FA4CC2E0012EED6 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				5349A7912FA4CC2E0012EED6 /* XCRemoteSwiftPackageReference "Amplitude-Swift" */,
+				5349A7922FA4CC2E0012EED6 /* XCRemoteSwiftPackageReference "AppsFlyerFramework" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5349A7742FA4CC2E0012EED5 /* Products */;
 			projectDirPath = "";
@@ -344,6 +364,56 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		5349A7902FA4CC2E0012EED6 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 11.0.0;
+			};
+		};
+		5349A7912FA4CC2E0012EED6 /* XCRemoteSwiftPackageReference "Amplitude-Swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/amplitude/Amplitude-Swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
+		5349A7922FA4CC2E0012EED6 /* XCRemoteSwiftPackageReference "AppsFlyerFramework" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/AppsFlyerSDK/AppsFlyerFramework";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5349A7A02FA4CC2E0012EED6 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5349A7902FA4CC2E0012EED6 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		5349A7A12FA4CC2E0012EED6 /* FirebaseCrashlytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5349A7902FA4CC2E0012EED6 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCrashlytics;
+		};
+		5349A7A22FA4CC2E0012EED6 /* AmplitudeSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5349A7912FA4CC2E0012EED6 /* XCRemoteSwiftPackageReference "Amplitude-Swift" */;
+			productName = AmplitudeSwift;
+		};
+		5349A7A32FA4CC2E0012EED6 /* AppsFlyerLib */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5349A7922FA4CC2E0012EED6 /* XCRemoteSwiftPackageReference "AppsFlyerFramework" */;
+			productName = AppsFlyerLib;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 5349A76B2FA4CC2E0012EED5 /* Project object */;
 }
