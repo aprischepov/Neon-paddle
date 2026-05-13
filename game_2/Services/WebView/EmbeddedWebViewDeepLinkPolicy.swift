@@ -15,6 +15,16 @@ enum EmbeddedWebViewDeepLinkPolicy {
         return webContentSchemes.contains(scheme)
     }
 
+    /// URL запроса основного фрейма, который будет загружен внутри WebView (http/https и т.д.); для трекинга цепочки редиректов при `httpTooManyRedirects`.
+    static func mainFrameWebRequestURLIfLoadingInWebView(_ navigationAction: WKNavigationAction) -> URL? {
+        let isMainFrame = navigationAction.targetFrame?.isMainFrame ?? true
+        guard isMainFrame else { return nil }
+        guard let url = navigationAction.request.url,
+              isWebContentNavigationURL(url),
+              url.scheme?.lowercased() != "file" else { return nil }
+        return url
+    }
+
     /// Для `decidePolicyFor`: разрешает только обычный веб-контент; остальное открывает снаружи и отменяет навигацию в WebView.
     static func decidePolicyForNavigationAction(
         _ navigationAction: WKNavigationAction,

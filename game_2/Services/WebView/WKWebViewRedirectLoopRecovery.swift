@@ -4,6 +4,8 @@ import Foundation
 enum WKWebViewRedirectLoopRecovery {
     final class Session {
         private(set) var lastProvisionalRedirectURL: URL?
+        /// Последний URL основного фрейма из `decidePolicyFor` (редиректы тоже приходят сюда); WK не всегда даёт `webView.url` и ключи в `NSError` при `-1007`.
+        private var lastMainFramePolicyURL: URL?
         private var recoveryLoadIssued = false
         private var isRecoveryNavigation = false
 
@@ -15,15 +17,25 @@ enum WKWebViewRedirectLoopRecovery {
             isRecoveryNavigation = false
         }
 
+        /// Вызывать для основного фрейма при навигации, которую WebView реально загружает (http/https и т.д., не внешние схемы).
+        func noteMainFrameProvisionalURL(_ url: URL?) {
+            guard let url else { return }
+            lastMainFramePolicyURL = url
+        }
+
         func noteServerRedirect(targetURL: URL?) {
             lastProvisionalRedirectURL = targetURL
         }
 
         /// Если нужно продолжить загрузку после слишком длинной цепочки редиректов — вернуть запрос; иначе `nil`.
-        func recoveryRequestIfNeeded(for error: Error) -> URLRequest? {
+        func recoveryRequestIfNeeded(for error: Error, fallbackURL: URL? = nil) -> URLRequest? {
             guard Self.isTooManyRedirects(error) else { return nil }
             guard !recoveryLoadIssued else { return nil }
-            guard let url = lastProvisionalRedirectURL ?? Self.failingURL(from: error) else { return nil }
+            let url = lastProvisionalRedirectURL
+                ?? lastMainFramePolicyURL
+                ?? Self.failingURL(from: error)
+                ?? fallbackURL
+            guard let url else { return nil }
             recoveryLoadIssued = true
             isRecoveryNavigation = true
             return URLRequest(url: url)
@@ -52,8 +64,15 @@ enum WKWebViewRedirectLoopRecovery {
                 if let url = ns.userInfo[NSURLErrorFailingURLErrorKey] as? URL {
                     return url
                 }
-                if let s = ns.userInfo[NSURLErrorFailingURLStringErrorKey] as? String, let url = URL(string: s) {
-                    return url
+                let stringKeys = [
+                    NSURLErrorFailingURLStringErrorKey,
+                    "NSErrorFailingURLStringKey",
+                    "WKErrorFailingURLStringKey",
+                ]
+                for key in stringKeys {
+                    if let s = ns.userInfo[key] as? String, let url = URL(string: s) {
+                        return url
+                    }
                 }
                 current = ns.userInfo[NSUnderlyingErrorKey] as? NSError
             }

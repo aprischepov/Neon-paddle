@@ -87,6 +87,9 @@ final class PolicyWebViewController: UIViewController, WKNavigationDelegate {
         preferences: WKWebpagePreferences,
         decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void
     ) {
+        if let u = EmbeddedWebViewDeepLinkPolicy.mainFrameWebRequestURLIfLoadingInWebView(navigationAction) {
+            redirectRecoverySession.noteMainFrameProvisionalURL(u)
+        }
         EmbeddedWebViewDeepLinkPolicy.decidePolicyForNavigationAction(navigationAction, preferences: preferences, decisionHandler: decisionHandler)
     }
 
@@ -103,7 +106,7 @@ final class PolicyWebViewController: UIViewController, WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        if let request = redirectRecoverySession.recoveryRequestIfNeeded(for: error) {
+        if let request = redirectRecoverySession.recoveryRequestIfNeeded(for: error, fallbackURL: pageURL) {
             webView.load(request)
             return
         }
@@ -112,7 +115,7 @@ final class PolicyWebViewController: UIViewController, WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        if let request = redirectRecoverySession.recoveryRequestIfNeeded(for: error) {
+        if let request = redirectRecoverySession.recoveryRequestIfNeeded(for: error, fallbackURL: pageURL) {
             webView.load(request)
             return
         }
