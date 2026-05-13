@@ -1,12 +1,8 @@
+import SwiftUI
 import UIKit
 
-enum NoInternetPresentationReason {
-    case firstLaunchConfigPending
-    case recurringWebViewOffline
-}
-
-/// Заглушка «нет сети»: отдельный экран, только кнопки (вёрстку можно заменить позже).
-final class NoInternetViewController: UIViewController {
+/// Контейнер для SwiftUI-экрана «нет сети»: навигация, уведомления, окно.
+final class NoInternetViewController: UIViewController, NoInternetScreenHost {
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
         AppOrientationPolicy.supportedInterfaceOrientations
     }
@@ -16,13 +12,16 @@ final class NoInternetViewController: UIViewController {
     }
 
     private let reason: NoInternetPresentationReason
-    private let retryButton = UIButton(type: .system)
-    private var routingObserver: NSObjectProtocol?
-    private var connectivityObserver: NSObjectProtocol?
+    private let screenModel: NoInternetScreenModel
+    private let hostingController: UIHostingController<NoInternetView>
 
     init(reason: NoInternetPresentationReason) {
         self.reason = reason
+        let model = NoInternetScreenModel(reason: reason)
+        self.screenModel = model
+        self.hostingController = UIHostingController(rootView: NoInternetView(model: model))
         super.init(nibName: nil, bundle: nil)
+        model.host = self
     }
 
     @available(*, unavailable)
@@ -32,44 +31,23 @@ final class NoInternetViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = .black
 
-        retryButton.setTitle("Повторить", for: .normal)
-        retryButton.translatesAutoresizingMaskIntoConstraints = false
-        retryButton.addTarget(self, action: #selector(retryTapped), for: .touchUpInside)
-        view.addSubview(retryButton)
-
+        addChild(hostingController)
+        view.addSubview(hostingController.view)
+        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            retryButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            retryButton.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            hostingController.view.topAnchor.constraint(equalTo: view.topAnchor),
+            hostingController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            hostingController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            hostingController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
-
-        routingObserver = NotificationCenter.default.addObserver(
-            forName: .appStartupRoutingReady,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.goToResolvedIfNeededAfterFirstLaunchRouting()
-        }
-
-        connectivityObserver = NotificationCenter.default.addObserver(
-            forName: .connectivityDidChange,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.onConnectivityChanged()
-        }
-
-        updateRetryAvailability()
+        hostingController.didMove(toParent: self)
     }
 
-    deinit {
-        if let routingObserver { NotificationCenter.default.removeObserver(routingObserver) }
-        if let connectivityObserver { NotificationCenter.default.removeObserver(connectivityObserver) }
-    }
+    // MARK: - NoInternetScreenHost
 
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
+    func noInternetScreenDidAppear() {
         switch reason {
         case .firstLaunchConfigPending:
             goToResolvedIfNeededAfterFirstLaunchRouting()
@@ -78,18 +56,7 @@ final class NoInternetViewController: UIViewController {
         }
     }
 
-    private func onConnectivityChanged() {
-        updateRetryAvailability()
-        if reason == .recurringWebViewOffline {
-            tryOpenWebViewAfterRecurringOfflineIfPossible()
-        }
-    }
-
-    private func updateRetryAvailability() {
-        retryButton.isEnabled = ConnectivityMonitor.shared.isOnline
-    }
-
-    @objc private func retryTapped() {
+    func noInternetRetryTapped() {
         guard ConnectivityMonitor.shared.isOnline else { return }
         guard let window = view.window else { return }
         switch reason {
@@ -102,6 +69,18 @@ final class NoInternetViewController: UIViewController {
             tryOpenWebViewAfterRecurringOfflineIfPossible(forceEndpointRefresh: true)
         }
     }
+
+    func noInternetRoutingReadyNotification() {
+        goToResolvedIfNeededAfterFirstLaunchRouting()
+    }
+
+    func noInternetConnectivityChanged() {
+        if reason == .recurringWebViewOffline {
+            tryOpenWebViewAfterRecurringOfflineIfPossible()
+        }
+    }
+
+    // MARK: - Private
 
     private func goToResolvedIfNeededAfterFirstLaunchRouting() {
         guard reason == .firstLaunchConfigPending else { return }
@@ -121,3 +100,4 @@ final class NoInternetViewController: UIViewController {
         }
     }
 }
+
