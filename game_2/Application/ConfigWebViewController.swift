@@ -195,19 +195,27 @@ extension ConfigWebViewController: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         let fallback = URL(string: loadedURLString)
-        if let request = redirectRecoverySession.recoveryRequestIfNeeded(for: error, fallbackURL: fallback) {
-            webView.load(request)
-            return
+        Task { @MainActor in
+            if await WKWebViewRedirectLoopRecovery.handleTooManyRedirectsRecoveryIfNeeded(
+                webView: webView,
+                error: error,
+                session: redirectRecoverySession,
+                fallbackURL: fallback
+            ) { return }
+            EmbeddedWebViewDeepLinkPolicy.recoverWithGoBackIfUnsupportedURL(webView: webView, error: error)
         }
-        EmbeddedWebViewDeepLinkPolicy.recoverWithGoBackIfUnsupportedURL(webView: webView, error: error)
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         let fallback = URL(string: loadedURLString)
-        if let request = redirectRecoverySession.recoveryRequestIfNeeded(for: error, fallbackURL: fallback) {
-            webView.load(request)
-            return
+        Task { @MainActor in
+            if await WKWebViewRedirectLoopRecovery.handleTooManyRedirectsRecoveryIfNeeded(
+                webView: webView,
+                error: error,
+                session: redirectRecoverySession,
+                fallbackURL: fallback
+            ) { return }
+            EmbeddedWebViewDeepLinkPolicy.recoverWithGoBackIfUnsupportedURL(webView: webView, error: error)
         }
-        EmbeddedWebViewDeepLinkPolicy.recoverWithGoBackIfUnsupportedURL(webView: webView, error: error)
     }
 }

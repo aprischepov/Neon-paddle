@@ -147,18 +147,26 @@ extension PushPayloadWebViewController: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        if let request = redirectRecoverySession.recoveryRequestIfNeeded(for: error, fallbackURL: url) {
-            webView.load(request)
-            return
+        Task { @MainActor in
+            if await WKWebViewRedirectLoopRecovery.handleTooManyRedirectsRecoveryIfNeeded(
+                webView: webView,
+                error: error,
+                session: redirectRecoverySession,
+                fallbackURL: url
+            ) { return }
+            EmbeddedWebViewDeepLinkPolicy.recoverWithGoBackIfUnsupportedURL(webView: webView, error: error)
         }
-        EmbeddedWebViewDeepLinkPolicy.recoverWithGoBackIfUnsupportedURL(webView: webView, error: error)
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        if let request = redirectRecoverySession.recoveryRequestIfNeeded(for: error, fallbackURL: url) {
-            webView.load(request)
-            return
+        Task { @MainActor in
+            if await WKWebViewRedirectLoopRecovery.handleTooManyRedirectsRecoveryIfNeeded(
+                webView: webView,
+                error: error,
+                session: redirectRecoverySession,
+                fallbackURL: url
+            ) { return }
+            EmbeddedWebViewDeepLinkPolicy.recoverWithGoBackIfUnsupportedURL(webView: webView, error: error)
         }
-        EmbeddedWebViewDeepLinkPolicy.recoverWithGoBackIfUnsupportedURL(webView: webView, error: error)
     }
 }

@@ -106,20 +106,34 @@ final class PolicyWebViewController: UIViewController, WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        if let request = redirectRecoverySession.recoveryRequestIfNeeded(for: error, fallbackURL: pageURL) {
-            webView.load(request)
-            return
+        Task { @MainActor in
+            if await WKWebViewRedirectLoopRecovery.handleTooManyRedirectsRecoveryIfNeeded(
+                webView: webView,
+                error: error,
+                session: redirectRecoverySession,
+                fallbackURL: pageURL
+            ) {
+                activityIndicator.stopAnimating()
+                return
+            }
+            EmbeddedWebViewDeepLinkPolicy.recoverWithGoBackIfUnsupportedURL(webView: webView, error: error)
+            activityIndicator.stopAnimating()
         }
-        EmbeddedWebViewDeepLinkPolicy.recoverWithGoBackIfUnsupportedURL(webView: webView, error: error)
-        activityIndicator.stopAnimating()
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        if let request = redirectRecoverySession.recoveryRequestIfNeeded(for: error, fallbackURL: pageURL) {
-            webView.load(request)
-            return
+        Task { @MainActor in
+            if await WKWebViewRedirectLoopRecovery.handleTooManyRedirectsRecoveryIfNeeded(
+                webView: webView,
+                error: error,
+                session: redirectRecoverySession,
+                fallbackURL: pageURL
+            ) {
+                activityIndicator.stopAnimating()
+                return
+            }
+            EmbeddedWebViewDeepLinkPolicy.recoverWithGoBackIfUnsupportedURL(webView: webView, error: error)
+            activityIndicator.stopAnimating()
         }
-        EmbeddedWebViewDeepLinkPolicy.recoverWithGoBackIfUnsupportedURL(webView: webView, error: error)
-        activityIndicator.stopAnimating()
     }
 }
