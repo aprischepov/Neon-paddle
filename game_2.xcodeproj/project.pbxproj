@@ -11,10 +11,40 @@
 		53701E002FB1D02100A9A5E6 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 5349A7A12FA4CC2E0012EED6 /* FirebaseCrashlytics */; };
 		53701E012FB1D02100A9A5E6 /* AmplitudeSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 5349A7A22FA4CC2E0012EED6 /* AmplitudeSwift */; };
 		53701E022FB1D02100A9A5E6 /* AppsFlyerLib in Frameworks */ = {isa = PBXBuildFile; productRef = 5349A7A32FA4CC2E0012EED6 /* AppsFlyerLib */; };
+		53701EBF2FB3767600A9A5E6 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 53701EBE2FB3767600A9A5E6 /* FirebaseMessaging */; };
+		A00101032FA4CC2E0012EED6 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00101012FA4CC2E0012EED6 /* NotificationService.swift */; };
+		A00101042FA4CC2E0012EED6 /* GlowBounceNotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A00101022FA4CC2E0012EED6 /* GlowBounceNotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A00101152FA4CC2E0012EED6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5349A76B2FA4CC2E0012EED5 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A00101052FA4CC2E0012EED6;
+			remoteInfo = GlowBounceNotificationService;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A00101092FA4CC2E0012EED6 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A00101042FA4CC2E0012EED6 /* GlowBounceNotificationService.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		5349A7732FA4CC2E0012EED5 /* game_2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = game_2.app; path = "Glow Bounce.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A00101012FA4CC2E0012EED6 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		A00101022FA4CC2E0012EED6 /* GlowBounceNotificationService.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GlowBounceNotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A00101172FA4CC2E0012EED6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -32,8 +62,16 @@
 			files = (
 				53701E022FB1D02100A9A5E6 /* AppsFlyerLib in Frameworks */,
 				53701E012FB1D02100A9A5E6 /* AmplitudeSwift in Frameworks */,
+				53701EBF2FB3767600A9A5E6 /* FirebaseMessaging in Frameworks */,
 				53701E002FB1D02100A9A5E6 /* FirebaseCrashlytics in Frameworks */,
 				53701DFF2FB1D02100A9A5E6 /* FirebaseCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00101072FA4CC2E0012EED6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -44,6 +82,8 @@
 			isa = PBXGroup;
 			children = (
 				5349A7752FA4CC2E0012EED5 /* game_2 */,
+				A00101162FA4CC2E0012EED6 /* GlowBounceNotificationService */,
+				53701EBD2FB3767600A9A5E6 /* Frameworks */,
 				5349A7742FA4CC2E0012EED5 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -52,8 +92,25 @@
 			isa = PBXGroup;
 			children = (
 				5349A7732FA4CC2E0012EED5 /* game_2.app */,
+				A00101022FA4CC2E0012EED6 /* GlowBounceNotificationService.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		53701EBD2FB3767600A9A5E6 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		A00101162FA4CC2E0012EED6 /* GlowBounceNotificationService */ = {
+			isa = PBXGroup;
+			children = (
+				A00101012FA4CC2E0012EED6 /* NotificationService.swift */,
+				A00101172FA4CC2E0012EED6 /* Info.plist */,
+			);
+			path = GlowBounceNotificationService;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -66,10 +123,12 @@
 				5349A76F2FA4CC2E0012EED5 /* Sources */,
 				5349A7702FA4CC2E0012EED5 /* Frameworks */,
 				5349A7712FA4CC2E0012EED5 /* Resources */,
+				A00101092FA4CC2E0012EED6 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A00101132FA4CC2E0012EED6 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				5349A7752FA4CC2E0012EED5 /* game_2 */,
@@ -80,10 +139,28 @@
 				5349A7A12FA4CC2E0012EED6 /* FirebaseCrashlytics */,
 				5349A7A22FA4CC2E0012EED6 /* AmplitudeSwift */,
 				5349A7A32FA4CC2E0012EED6 /* AppsFlyerLib */,
+				53701EBE2FB3767600A9A5E6 /* FirebaseMessaging */,
 			);
 			productName = game_2;
 			productReference = 5349A7732FA4CC2E0012EED5 /* game_2.app */;
 			productType = "com.apple.product-type.application";
+		};
+		A00101052FA4CC2E0012EED6 /* GlowBounceNotificationService */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00101192FA4CC2E0012EED6 /* Build configuration list for PBXNativeTarget "GlowBounceNotificationService" */;
+			buildPhases = (
+				A00101062FA4CC2E0012EED6 /* Sources */,
+				A00101072FA4CC2E0012EED6 /* Frameworks */,
+				A00101082FA4CC2E0012EED6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = GlowBounceNotificationService;
+			productName = GlowBounceNotificationService;
+			productReference = A00101022FA4CC2E0012EED6 /* GlowBounceNotificationService.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -96,6 +173,9 @@
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
 					5349A7722FA4CC2E0012EED5 = {
+						CreatedOnToolsVersion = 26.2;
+					};
+					A00101052FA4CC2E0012EED6 = {
 						CreatedOnToolsVersion = 26.2;
 					};
 				};
@@ -120,12 +200,20 @@
 			projectRoot = "";
 			targets = (
 				5349A7722FA4CC2E0012EED5 /* game_2 */,
+				A00101052FA4CC2E0012EED6 /* GlowBounceNotificationService */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		5349A7712FA4CC2E0012EED5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00101082FA4CC2E0012EED6 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -142,7 +230,23 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A00101062FA4CC2E0012EED6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00101032FA4CC2E0012EED6 /* NotificationService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A00101132FA4CC2E0012EED6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A00101052FA4CC2E0012EED6 /* GlowBounceNotificationService */;
+			targetProxy = A00101152FA4CC2E0012EED6 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		5349A7882FA4CC2F0012EED5 /* Debug */ = {
@@ -276,8 +380,11 @@
 				DEVELOPMENT_TEAM = C4QZKCN6PP;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Glow Bounce";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Camera access is used when you choose to take a photo to upload on the website.";
+				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "We send offers, reminders, and important updates about your activity in the app.";
 				INFOPLIST_KEY_NSUserTrackingUsageDescription = "This identifier is used to measure ad performance and partner analytics (AppsFlyer).";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = "remote-notification";
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
 				INFOPLIST_KEY_UIStatusBarHidden = YES;
@@ -315,8 +422,11 @@
 				DEVELOPMENT_TEAM = C4QZKCN6PP;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Glow Bounce";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Camera access is used when you choose to take a photo to upload on the website.";
+				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "We send offers, reminders, and important updates about your activity in the app.";
 				INFOPLIST_KEY_NSUserTrackingUsageDescription = "This identifier is used to measure ad performance and partner analytics (AppsFlyer).";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = "remote-notification";
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
 				INFOPLIST_KEY_UIStatusBarHidden = YES;
@@ -344,6 +454,56 @@
 			};
 			name = Release;
 		};
+		A001011A2FA4CC2E0012EED6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C4QZKCN6PP;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = GlowBounceNotificationService/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.vineD.app.glow-bounce.NotificationService";
+				PRODUCT_NAME = GlowBounceNotificationService;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A001011B2FA4CC2E0012EED6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C4QZKCN6PP;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = GlowBounceNotificationService/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.vineD.app.glow-bounce.NotificationService";
+				PRODUCT_NAME = GlowBounceNotificationService;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -361,6 +521,15 @@
 			buildConfigurations = (
 				5349A78B2FA4CC2F0012EED5 /* Debug */,
 				5349A78C2FA4CC2F0012EED5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A00101192FA4CC2E0012EED6 /* Build configuration list for PBXNativeTarget "GlowBounceNotificationService" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A001011A2FA4CC2E0012EED6 /* Debug */,
+				A001011B2FA4CC2E0012EED6 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -414,6 +583,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 5349A7922FA4CC2E0012EED6 /* XCRemoteSwiftPackageReference "AppsFlyerFramework" */;
 			productName = AppsFlyerLib;
+		};
+		53701EBE2FB3767600A9A5E6 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5349A7902FA4CC2E0012EED6 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

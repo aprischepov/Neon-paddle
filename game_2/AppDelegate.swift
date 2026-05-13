@@ -6,35 +6,44 @@
 //
 
 import UIKit
+import UserNotifications
+import FirebaseMessaging
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
 
-
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        AnalyticsServices.configureAtLaunch(launchOptions: launchOptions)
+        UNUserNotificationCenter.current().delegate = PushNotificationCenterDelegate.shared
+
+        if let remote = launchOptions?[.remoteNotification] as? [AnyHashable: Any],
+           let urlString = PushUserInfoExtractor.urlString(from: remote) {
+            PendingPushURLStore.pendingURLString = urlString
+        }
+
+        AppBootstrap.performLaunch(launchOptions: launchOptions)
         return true
     }
 
-    func applicationWillResignActive(_ application: UIApplication) {
-        // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
-        // Use this method to pause ongoing tasks, disable timers, and invalidate graphics rendering callbacks. Games should use this method to pause the game.
-    }
-
-    func applicationDidEnterBackground(_ application: UIApplication) {
-        // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later.
-    }
-
-    func applicationWillEnterForeground(_ application: UIApplication) {
-        // Called as part of the transition from the background to the active state; here you can undo many of the changes made on entering the background.
-    }
-
     func applicationDidBecomeActive(_ application: UIApplication) {
-        AnalyticsServices.applicationDidBecomeActive()
+        AppForegroundCoordinator.applicationDidBecomeActive()
     }
 
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        NotificationsApplicationHook.didRegister(deviceToken: deviceToken)
+    }
 
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NotificationsApplicationHook.registrationDidFail(error: error)
+    }
+
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        Messaging.messaging().appDidReceiveMessage(userInfo)
+        completionHandler(.newData)
+    }
 }
-

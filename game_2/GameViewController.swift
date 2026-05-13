@@ -10,6 +10,14 @@ import SpriteKit
 
 class GameViewController: UIViewController {
 
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        AppOrientationPolicy.supportedInterfaceOrientations
+    }
+
+    override var shouldAutorotate: Bool {
+        AppOrientationPolicy.shouldAutorotate
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -19,14 +27,6 @@ class GameViewController: UIViewController {
             view.presentScene(scene)
 
             view.ignoresSiblingOrder = true
-        }
-    }
-
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        if UIDevice.current.userInterfaceIdiom == .phone {
-            return .allButUpsideDown
-        } else {
-            return .all
         }
     }
 
