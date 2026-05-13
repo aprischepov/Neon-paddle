@@ -1,7 +1,8 @@
+import SwiftUI
 import UIKit
 
-/// Кастомный запрос уведомлений до WebView; вёрстка в `UIScrollView` для портрета и альбома.
-final class PushNotificationPrePromptViewController: UIViewController {
+/// Кастомный запрос уведомлений до WebView: SwiftUI внутри `UIHostingController`.
+final class PushNotificationPrePromptViewController: UIViewController, PushNotificationPrePromptScreenHost {
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
         AppOrientationPolicy.supportedInterfaceOrientations
     }
@@ -12,18 +13,20 @@ final class PushNotificationPrePromptViewController: UIViewController {
 
     private let onAllow: () -> Void
     private let onSkip: () -> Void
-
-    private let scrollView = UIScrollView()
-    private let contentView = UIView()
-    private let stack = UIStackView()
-    private let allowButton = UIButton(type: .system)
-    private let skipButton = UIButton(type: .system)
+    private var didHandleChoice = false
+    private let screenModel: PushNotificationPrePromptScreenModel
+    private let hostingController: UIHostingController<PushNotificationPrePromptView>
 
     init(onAllow: @escaping () -> Void, onSkip: @escaping () -> Void) {
         self.onAllow = onAllow
         self.onSkip = onSkip
+        let model = PushNotificationPrePromptScreenModel()
+        self.screenModel = model
+        self.hostingController = UIHostingController(rootView: PushNotificationPrePromptView(model: model))
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .fullScreen
+        isModalInPresentation = true
+        model.host = self
     }
 
     @available(*, unavailable)
@@ -35,59 +38,29 @@ final class PushNotificationPrePromptViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
 
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.alwaysBounceVertical = true
-        scrollView.showsVerticalScrollIndicator = true
-        contentView.translatesAutoresizingMaskIntoConstraints = false
-
-        stack.axis = .vertical
-        stack.spacing = 16
-        stack.alignment = .fill
-        stack.distribution = .fill
-        stack.translatesAutoresizingMaskIntoConstraints = false
-
-        allowButton.setTitle("Разрешить уведомления", for: .normal)
-        allowButton.addTarget(self, action: #selector(allowTapped), for: .touchUpInside)
-
-        skipButton.setTitle("Не сейчас", for: .normal)
-        skipButton.addTarget(self, action: #selector(skipTapped), for: .touchUpInside)
-
-        stack.addArrangedSubview(allowButton)
-        stack.addArrangedSubview(skipButton)
-
-        view.addSubview(scrollView)
-        scrollView.addSubview(contentView)
-        contentView.addSubview(stack)
-
-        let centerY = stack.centerYAnchor.constraint(equalTo: contentView.centerYAnchor)
-        centerY.priority = UILayoutPriority(750)
-
+        addChild(hostingController)
+        view.addSubview(hostingController.view)
+        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
-
-            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
-            contentView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
-            contentView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
-            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
-            contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
-
-            stack.topAnchor.constraint(greaterThanOrEqualTo: contentView.topAnchor, constant: 24),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -24),
-            centerY,
-            stack.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            stack.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.layoutMarginsGuide.leadingAnchor),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: contentView.layoutMarginsGuide.trailingAnchor),
+            hostingController.view.topAnchor.constraint(equalTo: view.topAnchor),
+            hostingController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            hostingController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            hostingController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
+        hostingController.didMove(toParent: self)
     }
 
-    @objc private func allowTapped() {
+    // MARK: - PushNotificationPrePromptScreenHost
+
+    func pushPrePromptAllowTapped() {
+        guard !didHandleChoice else { return }
+        didHandleChoice = true
         dismiss(animated: true) { self.onAllow() }
     }
 
-    @objc private func skipTapped() {
+    func pushPrePromptSkipTapped() {
+        guard !didHandleChoice else { return }
+        didHandleChoice = true
         dismiss(animated: true) { self.onSkip() }
     }
 }
