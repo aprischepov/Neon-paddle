@@ -259,6 +259,7 @@ jobs:
         
         export CI_PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID"
         export CI_CODE_SIGN_IDENTITY="$CODE_SIGN_IDENTITY"
+        export CI_DEVELOPMENT_TEAM="${{ secrets.TEAM_ID }}"
         python3 "$SPM_SCRIPT" "${{ secrets.TARGET_PROJECT }}.xcodeproj/project.pbxproj" "$PROFILE_UUID" "${{ secrets.TARGET_PROJECT }}" "$EXTENSION_PROFILE_UUID"
         
         if [ $? -ne 0 ]; then

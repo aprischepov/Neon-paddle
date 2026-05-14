@@ -7,6 +7,9 @@
   CI_PRODUCT_BUNDLE_IDENTIFIER — основной таргет (все Debug/Release конфиги);
   EXTENSION_BUNDLE_IDENTIFIER — таргет расширения (все конфиги), если расширение есть в проекте.
 
+Выставляет DEVELOPMENT_TEAM из CI_DEVELOPMENT_TEAM (= TEAM_ID) для всех конфигов приложения и расширения,
+чтобы ValidateEmbeddedBinary не падал из‑за разных Team ID у .app и .appex.
+
 Вставляет PROVISIONING_PROFILE_SPECIFIER в Release для приложения и расширения, затем
 CODE_SIGN_STYLE = Manual и CODE_SIGN_IDENTITY (из CI_CODE_SIGN_IDENTITY) только для этих Release.
 Глобальные CODE_SIGN_STYLE / CODE_SIGN_IDENTITY в xcodebuild не используются — иначе SPM (Firebase)
@@ -350,6 +353,43 @@ def patch_code_sign_identity_in_config(new_content, build_config_id, identity):
     return new_content, False
 
 
+def patch_development_team_in_config(new_content, build_config_id, team_id):
+    """Выставляет DEVELOPMENT_TEAM в указанной конфигурации (один team для app + extension)."""
+    if not team_id:
+        return new_content, False
+    find_variants = find_build_config_variants(new_content, build_config_id)
+    if not find_variants:
+        return new_content, False
+    line = f"\t\t\t\tDEVELOPMENT_TEAM = {team_id};"
+    for _name, find_match in find_variants:
+        config_header = find_match.group(1)
+        config_body = find_match.group(2)
+        config_footer = find_match.group(3)
+        if re.search(r"\t\t\t\tDEVELOPMENT_TEAM\s*=\s*[^;]+;", config_body):
+            new_body = re.sub(
+                r"\t\t\t\tDEVELOPMENT_TEAM\s*=\s*[^;]+;",
+                line,
+                config_body,
+                count=1,
+            )
+        else:
+            new_body = re.sub(
+                r"(buildSettings = \{)",
+                rf"\1\n{line}",
+                config_body,
+                count=1,
+            )
+        new_content = (
+            new_content[: find_match.start()]
+            + config_header
+            + new_body
+            + config_footer
+            + new_content[find_match.end() :]
+        )
+        return new_content, True
+    return new_content, False
+
+
 def exclude_spm_from_signing(
     pbxproj_path,
     profile_uuid=None,
@@ -553,6 +593,21 @@ def exclude_spm_from_signing(
                     print(f"❌ Error: Could not set PRODUCT_BUNDLE_IDENTIFIER for extension config {cid}")
                     sys.exit(1)
                 changes_made = True
+
+        team = os.environ.get("CI_DEVELOPMENT_TEAM", "").strip()
+        if not team:
+            print(
+                "❌ Error: CI_DEVELOPMENT_TEAM is not set. Export GitHub secret TEAM_ID as CI_DEVELOPMENT_TEAM "
+                "before running this script so the app and notification extension use the same team."
+            )
+            sys.exit(1)
+        print(f"🔧 DEVELOPMENT_TEAM (app + extension, all configs) -> {team}")
+        for cid in sorted(main_config_ids | ext_ids):
+            new_content, ok = patch_development_team_in_config(new_content, cid, team)
+            if not ok:
+                print(f"❌ Error: Could not set DEVELOPMENT_TEAM for config {cid}")
+                sys.exit(1)
+            changes_made = True
 
         print(f"🔧 Adding PROVISIONING_PROFILE_SPECIFIER to main app Release ({target_name}): {profile_uuid}")
         new_content, ok_main = apply_provisioning_profile_to_release_config(
