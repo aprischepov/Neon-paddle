@@ -8,8 +8,9 @@
   EXTENSION_BUNDLE_IDENTIFIER — таргет расширения (все конфиги), если расширение есть в проекте.
 
 Вставляет PROVISIONING_PROFILE_SPECIFIER в Release для приложения и расширения, затем
-CODE_SIGN_STYLE = Manual только для этих Release (глобальный Manual в xcodebuild не используется,
-чтобы SPM-зависимости не наследовали Manual без своего профиля).
+CODE_SIGN_STYLE = Manual и CODE_SIGN_IDENTITY (из CI_CODE_SIGN_IDENTITY) только для этих Release.
+Глобальные CODE_SIGN_STYLE / CODE_SIGN_IDENTITY в xcodebuild не используются — иначе SPM (Firebase)
+получают Apple Distribution при Automatic signing.
 """
 
 import re
@@ -311,6 +312,44 @@ def patch_code_sign_style_in_config(new_content, build_config_id, style):
     return new_content, False
 
 
+def patch_code_sign_identity_in_config(new_content, build_config_id, identity):
+    """Выставляет CODE_SIGN_IDENTITY (в кавычках, как в Xcode) только в указанной конфигурации."""
+    if not identity:
+        return new_content, False
+    find_variants = find_build_config_variants(new_content, build_config_id)
+    if not find_variants:
+        return new_content, False
+    escaped = identity.replace("\\", "\\\\").replace('"', '\\"')
+    line = f'\t\t\t\tCODE_SIGN_IDENTITY = "{escaped}";'
+    for _name, find_match in find_variants:
+        config_header = find_match.group(1)
+        config_body = find_match.group(2)
+        config_footer = find_match.group(3)
+        if re.search(r"\t\t\t\tCODE_SIGN_IDENTITY\s*=\s*[^;]+;", config_body):
+            new_body = re.sub(
+                r"\t\t\t\tCODE_SIGN_IDENTITY\s*=\s*[^;]+;",
+                line,
+                config_body,
+                count=1,
+            )
+        else:
+            new_body = re.sub(
+                r"(buildSettings = \{)",
+                rf"\1\n{line}",
+                config_body,
+                count=1,
+            )
+        new_content = (
+            new_content[: find_match.start()]
+            + config_header
+            + new_body
+            + config_footer
+            + new_content[find_match.end() :]
+        )
+        return new_content, True
+    return new_content, False
+
+
 def exclude_spm_from_signing(
     pbxproj_path,
     profile_uuid=None,
@@ -549,6 +588,26 @@ def exclude_spm_from_signing(
             new_content, ok_ecs = patch_code_sign_style_in_config(new_content, ext_release_config_id, "Manual")
             if not ok_ecs:
                 print("❌ Error: Could not set CODE_SIGN_STYLE for extension Release")
+                sys.exit(1)
+            changes_made = True
+
+        sign_id = os.environ.get("CI_CODE_SIGN_IDENTITY", "").strip()
+        if not sign_id:
+            print(
+                "❌ Error: CI_CODE_SIGN_IDENTITY is not set. The workflow should export the resolved "
+                "distribution identity string before running this script."
+            )
+            sys.exit(1)
+        print("🔧 CODE_SIGN_IDENTITY only for main + extension Release (SPM не получает identity из CLI)")
+        new_content, ok_mid = patch_code_sign_identity_in_config(new_content, release_config_id, sign_id)
+        if not ok_mid:
+            print("❌ Error: Could not set CODE_SIGN_IDENTITY for main Release")
+            sys.exit(1)
+        changes_made = True
+        if ext_release_config_id:
+            new_content, ok_eid = patch_code_sign_identity_in_config(new_content, ext_release_config_id, sign_id)
+            if not ok_eid:
+                print("❌ Error: Could not set CODE_SIGN_IDENTITY for extension Release")
                 sys.exit(1)
             changes_made = True
     
