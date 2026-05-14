@@ -2,7 +2,7 @@ name: iOS CI - Build and Upload to App Store Connect
 
 on:
   push:
-#    branches: [ "release" ]
+    branches: [ "release" ]
   workflow_dispatch: # Позволяет запускать workflow вручную из GitHub Actions UI
 
 jobs:
