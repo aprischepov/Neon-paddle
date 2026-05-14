@@ -11,6 +11,7 @@ jobs:
     
     env:
       BUNDLE_IDENTIFIER: ${{ secrets.BUNDLE_IDENTIFIER }}
+      EXTENSION_BUNDLE_IDENTIFIER: ${{ secrets.EXTENSION_BUNDLE_IDENTIFIER }}
 
     steps:
     # Шаг 1: Клонируем репозиторий
@@ -184,6 +185,12 @@ jobs:
         fi
         echo "✅ Using release bundle identifier: $BUNDLE_ID"
         
+        if [ -z "$EXTENSION_BUNDLE_IDENTIFIER" ]; then
+          echo "❌ Error: EXTENSION_BUNDLE_IDENTIFIER secret is not set (bundle id таргета GlowBounceNotificationService, как в Apple Developer)"
+          exit 1
+        fi
+        echo "✅ Extension bundle identifier from secrets: $EXTENSION_BUNDLE_IDENTIFIER"
+        
         # Настраиваем keychain для использования сертификата
         # apple-actions/import-codesign-certs создает keychain с именем по умолчанию
         KEYCHAIN_PATH=$(security list-keychains | grep -i "keychain" | head -1 | tr -d ' ' | tr -d '"')
@@ -269,7 +276,6 @@ jobs:
           -archivePath ./output/${{ secrets.TARGET_PROJECT }}.xcarchive
           -skipPackageUpdates
           DEVELOPMENT_TEAM=${{ secrets.TEAM_ID }}
-          CODE_SIGN_STYLE=Manual
           CODE_SIGN_IDENTITY="$CODE_SIGN_IDENTITY"
           COMPILER_INDEX_STORE_ENABLE=NO
           SWIFT_COMPILATION_MODE=wholemodule
@@ -328,15 +334,13 @@ jobs:
           echo "❌ Error: profile_extension.mobileprovision not found"
           exit 1
         fi
-        security cms -D -i profile_extension.mobileprovision > /tmp/extension_profile.plist
-        EXT_APP_ID_RAW=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' /tmp/extension_profile.plist)
-        EXTENSION_BUNDLE_ID="${EXT_APP_ID_RAW#*.}"
-        EXTENSION_PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print Name' /tmp/extension_profile.plist)
+        EXTENSION_PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print Name' /dev/stdin <<< "$(security cms -D -i profile_extension.mobileprovision)")
+        EXTENSION_BUNDLE_ID="$EXTENSION_BUNDLE_IDENTIFIER"
         if [ -z "$EXTENSION_BUNDLE_ID" ] || [ -z "$EXTENSION_PROFILE_NAME" ]; then
-          echo "❌ Error: Failed to read extension profile name or application-identifier"
+          echo "❌ Error: EXTENSION_BUNDLE_IDENTIFIER secret or extension profile name is missing"
           exit 1
         fi
-        echo "✅ Extension export mapping: $EXTENSION_BUNDLE_ID -> $EXTENSION_PROFILE_NAME"
+        echo "✅ Extension export mapping (bundle id из секрета): $EXTENSION_BUNDLE_ID -> $EXTENSION_PROFILE_NAME"
         
         # Без «голого» <?xml у колонки 0 — иначе YAML workflow считает это началом нового документа.
         {

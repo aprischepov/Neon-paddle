@@ -1,14 +1,34 @@
 #!/usr/bin/env python3
 """
-Скрипт для исключения SPM зависимостей от применения лишних настроек подписи.
-Удаляет PROVISIONING_PROFILE_SPECIFIER и CODE_SIGN_ENTITLEMENTS из SPM таргетов.
-Добавляет PROVISIONING_PROFILE_SPECIFIER только для основного таргета.
-Пробует множество вариантов поиска и добавления, логирует успешный.
+Скрипт для CI: убирает PROVISIONING_PROFILE_SPECIFIER и CODE_SIGN_ENTITLEMENTS у всего,
+кроме нативных таргетов приложения и расширения (SPM в project.pbxproj отдельных XCBuildConfiguration не создаёт).
+
+Задаёт bundle id из переменных окружения (секреты GitHub Actions):
+  CI_PRODUCT_BUNDLE_IDENTIFIER — основной таргет (все Debug/Release конфиги);
+  EXTENSION_BUNDLE_IDENTIFIER — таргет расширения (все конфиги), если расширение есть в проекте.
+
+Вставляет PROVISIONING_PROFILE_SPECIFIER в Release для приложения и расширения, затем
+CODE_SIGN_STYLE = Manual только для этих Release (глобальный Manual в xcodebuild не используется,
+чтобы SPM-зависимости не наследовали Manual без своего профиля).
 """
 
 import re
 import sys
 import os
+
+def find_build_config_variants(content, build_config_id):
+    """Находит блок XCBuildConfiguration по id (Debug или Release)."""
+    variants = []
+    pattern = rf'(\t\t{re.escape(build_config_id)} /\* [^*]+ \*/ = \{{)(.*?)(\t\t\}};)'
+    match = re.search(pattern, content, flags=re.DOTALL)
+    if match:
+        variants.append(("VARIANT_COMMENT", match))
+    pattern2 = rf'(\t\t{re.escape(build_config_id)} = \{{)(.*?)(\t\t\}};)'
+    match2 = re.search(pattern2, content, flags=re.DOTALL)
+    if match2:
+        variants.append(("VARIANT_NO_COMMENT", match2))
+    return variants
+
 
 def find_release_config_variants(content, release_config_id):
     """Пробует множество вариантов поиска Release конфигурации"""
@@ -195,7 +215,9 @@ def collect_target_build_configuration_ids(content, target_name):
 
 def apply_provisioning_profile_to_release_config(new_content, release_config_id, profile_uuid, target_name):
     """Вставляет PROVISIONING_PROFILE_SPECIFIER в Release-блок указанной конфигурации."""
-    find_variants = find_release_config_variants(new_content, release_config_id)
+    find_variants = find_build_config_variants(new_content, release_config_id)
+    if not find_variants:
+        find_variants = find_release_config_variants(new_content, release_config_id)
     if not find_variants:
         return new_content, False
     for find_variant_name, find_match in find_variants:
@@ -218,9 +240,9 @@ def apply_provisioning_profile_to_release_config(new_content, release_config_id,
     return new_content, False
 
 
-def patch_main_release_product_bundle_identifier(new_content, release_config_id, bundle_id):
-    """Подменяет PRODUCT_BUNDLE_IDENTIFIER только в Release основного таргета (CI релизный bundle)."""
-    find_variants = find_release_config_variants(new_content, release_config_id)
+def patch_product_bundle_identifier_in_config(new_content, build_config_id, bundle_id):
+    """Подменяет PRODUCT_BUNDLE_IDENTIFIER в указанной XCBuildConfiguration (Debug или Release)."""
+    find_variants = find_build_config_variants(new_content, build_config_id)
     if not find_variants:
         return new_content, False
     escaped = bundle_id.replace('\\', '\\\\').replace('"', '\\"')
@@ -240,6 +262,41 @@ def patch_main_release_product_bundle_identifier(new_content, release_config_id,
             new_body = re.sub(
                 r'(buildSettings = \{)',
                 rf'\1\n{line}',
+                config_body,
+                count=1,
+            )
+        new_content = (
+            new_content[: find_match.start()]
+            + config_header
+            + new_body
+            + config_footer
+            + new_content[find_match.end() :]
+        )
+        return new_content, True
+    return new_content, False
+
+
+def patch_code_sign_style_in_config(new_content, build_config_id, style):
+    """Выставляет CODE_SIGN_STYLE (Manual / Automatic) в указанной конфигурации."""
+    find_variants = find_build_config_variants(new_content, build_config_id)
+    if not find_variants:
+        return new_content, False
+    line = f"\t\t\t\tCODE_SIGN_STYLE = {style};"
+    for _name, find_match in find_variants:
+        config_header = find_match.group(1)
+        config_body = find_match.group(2)
+        config_footer = find_match.group(3)
+        if re.search(r"\t\t\t\tCODE_SIGN_STYLE\s*=\s*[^;]+;", config_body):
+            new_body = re.sub(
+                r"\t\t\t\tCODE_SIGN_STYLE\s*=\s*[^;]+;",
+                line,
+                config_body,
+                count=1,
+            )
+        else:
+            new_body = re.sub(
+                r"(buildSettings = \{)",
+                rf"\1\n{line}",
                 config_body,
                 count=1,
             )
@@ -397,6 +454,13 @@ def exclude_spm_from_signing(
                 "and pass its provisioning profile UUID as the 4th script argument."
             )
             sys.exit(1)
+        ext_bundle_env = os.environ.get("EXTENSION_BUNDLE_IDENTIFIER", "").strip()
+        if profile_uuid and not ext_bundle_env:
+            print(
+                "❌ Error: Set GitHub Actions secret EXTENSION_BUNDLE_IDENTIFIER to the extension's "
+                "PRODUCT_BUNDLE_IDENTIFIER (must match the App ID in the extension provisioning profile)."
+            )
+            sys.exit(1)
     
     # Удаляем PROVISIONING_PROFILE_SPECIFIER и CODE_SIGN_ENTITLEMENTS из всех конфигураций,
     # кроме основного приложения и указанных нативных таргетов (не SPM).
@@ -426,6 +490,31 @@ def exclude_spm_from_signing(
     new_content = re.sub(config_section_pattern, clean_non_main_configs, new_content, flags=re.DOTALL)
     
     if profile_uuid:
+        ci_main_bundle = os.environ.get("CI_PRODUCT_BUNDLE_IDENTIFIER", "").strip()
+        if not ci_main_bundle:
+            print(
+                "❌ Error: CI_PRODUCT_BUNDLE_IDENTIFIER is not set. The workflow should export it from "
+                "secret BUNDLE_IDENTIFIER before running this script."
+            )
+            sys.exit(1)
+        print(f"🔧 Patching main target bundle id (all configs) -> {ci_main_bundle}")
+        for cid in sorted(main_config_ids):
+            new_content, ok = patch_product_bundle_identifier_in_config(new_content, cid, ci_main_bundle)
+            if not ok:
+                print(f"❌ Error: Could not set PRODUCT_BUNDLE_IDENTIFIER for main config {cid}")
+                sys.exit(1)
+            changes_made = True
+
+        ext_bundle_env = os.environ.get("EXTENSION_BUNDLE_IDENTIFIER", "").strip()
+        if ext_ids:
+            print(f"🔧 Patching extension bundle id (all configs) -> {ext_bundle_env}")
+            for cid in sorted(ext_ids):
+                new_content, ok = patch_product_bundle_identifier_in_config(new_content, cid, ext_bundle_env)
+                if not ok:
+                    print(f"❌ Error: Could not set PRODUCT_BUNDLE_IDENTIFIER for extension config {cid}")
+                    sys.exit(1)
+                changes_made = True
+
         print(f"🔧 Adding PROVISIONING_PROFILE_SPECIFIER to main app Release ({target_name}): {profile_uuid}")
         new_content, ok_main = apply_provisioning_profile_to_release_config(
             new_content, release_config_id, profile_uuid, target_name
@@ -435,31 +524,33 @@ def exclude_spm_from_signing(
             sys.exit(1)
         changes_made = True
         print("✅ Main target Release: PROVISIONING_PROFILE_SPECIFIER applied")
-    
-    if extension_profile_uuid and ext_release_config_id:
-        print(
-            f"🔧 Adding PROVISIONING_PROFILE_SPECIFIER to extension Release ({extension_target_name}): "
-            f"{extension_profile_uuid}"
-        )
-        new_content, ok_ext = apply_provisioning_profile_to_release_config(
-            new_content, ext_release_config_id, extension_profile_uuid, extension_target_name
-        )
-        if not ok_ext:
-            print("❌ Error: Could not add PROVISIONING_PROFILE_SPECIFIER for extension target")
+
+        if extension_profile_uuid and ext_release_config_id:
+            print(
+                f"🔧 Adding PROVISIONING_PROFILE_SPECIFIER to extension Release ({extension_target_name}): "
+                f"{extension_profile_uuid}"
+            )
+            new_content, ok_ext = apply_provisioning_profile_to_release_config(
+                new_content, ext_release_config_id, extension_profile_uuid, extension_target_name
+            )
+            if not ok_ext:
+                print("❌ Error: Could not add PROVISIONING_PROFILE_SPECIFIER for extension target")
+                sys.exit(1)
+            changes_made = True
+            print("✅ Extension Release: PROVISIONING_PROFILE_SPECIFIER applied")
+
+        print("🔧 CODE_SIGN_STYLE = Manual for main + extension Release only (SPM без глобального Manual)")
+        new_content, ok_mcs = patch_code_sign_style_in_config(new_content, release_config_id, "Manual")
+        if not ok_mcs:
+            print("❌ Error: Could not set CODE_SIGN_STYLE for main Release")
             sys.exit(1)
         changes_made = True
-        print("✅ Extension Release: PROVISIONING_PROFILE_SPECIFIER applied")
-    
-    ci_bundle = os.environ.get("CI_PRODUCT_BUNDLE_IDENTIFIER", "").strip()
-    if ci_bundle:
-        print(f"🔧 Patching main Release PRODUCT_BUNDLE_IDENTIFIER -> {ci_bundle}")
-        new_content, ok_bundle = patch_main_release_product_bundle_identifier(
-            new_content, release_config_id, ci_bundle
-        )
-        if not ok_bundle:
-            print("❌ Error: Could not set PRODUCT_BUNDLE_IDENTIFIER for main Release")
-            sys.exit(1)
-        changes_made = True
+        if ext_release_config_id:
+            new_content, ok_ecs = patch_code_sign_style_in_config(new_content, ext_release_config_id, "Manual")
+            if not ok_ecs:
+                print("❌ Error: Could not set CODE_SIGN_STYLE for extension Release")
+                sys.exit(1)
+            changes_made = True
     
     # Сохраняем изменения
     if changes_made or new_content != original_content:
