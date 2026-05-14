@@ -586,6 +586,18 @@ def exclude_spm_from_signing(
 
         ext_bundle_env = os.environ.get("EXTENSION_BUNDLE_IDENTIFIER", "").strip()
         if ext_ids:
+            if not ext_bundle_env.startswith(ci_main_bundle + "."):
+                print(
+                    "❌ Error: EXTENSION_BUNDLE_IDENTIFIER must be BUNDLE_IDENTIFIER + \".\" + suffix. "
+                    "Apple requires the extension bundle id to be prefixed with the full parent app bundle id."
+                )
+                print(f"   App (CI_PRODUCT_BUNDLE_IDENTIFIER):     {ci_main_bundle}")
+                print(f"   Extension (EXTENSION_BUNDLE_IDENTIFIER): {ext_bundle_env}")
+                print(
+                    "   Example: com.example.myapp → com.example.myapp.notificationservice "
+                    "(not com.example.notificationservice when the app is com.example.myapp)"
+                )
+                sys.exit(1)
             print(f"🔧 Patching extension bundle id (all configs) -> {ext_bundle_env}")
             for cid in sorted(ext_ids):
                 new_content, ok = patch_product_bundle_identifier_in_config(new_content, cid, ext_bundle_env)

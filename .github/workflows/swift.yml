@@ -191,6 +191,16 @@ jobs:
         fi
         echo "✅ Extension bundle identifier from secrets: $EXTENSION_BUNDLE_IDENTIFIER"
         
+        # Apple: bundle id расширения = полный bundle id приложения + "." + суффикс (иначе ValidateEmbeddedBinary).
+        if [[ "$EXTENSION_BUNDLE_IDENTIFIER" != "$BUNDLE_ID."* ]]; then
+          echo "❌ Error: EXTENSION_BUNDLE_IDENTIFIER must start with the full BUNDLE_IDENTIFIER followed by a dot."
+          echo "   Parent app (secret BUNDLE_IDENTIFIER):     $BUNDLE_ID"
+          echo "   Extension (secret EXTENSION_BUNDLE_IDENTIFIER): $EXTENSION_BUNDLE_IDENTIFIER"
+          echo "   Valid example:   app com.acme.myapp  →  extension com.acme.myapp.notificationservice"
+          echo "   Invalid example: app com.acme.myapp  →  extension com.acme.notificationservice (sibling, not a prefix of the full app id)"
+          exit 1
+        fi
+        
         # Настраиваем keychain для использования сертификата
         # apple-actions/import-codesign-certs создает keychain с именем по умолчанию
         KEYCHAIN_PATH=$(security list-keychains | grep -i "keychain" | head -1 | tr -d ' ' | tr -d '"')
