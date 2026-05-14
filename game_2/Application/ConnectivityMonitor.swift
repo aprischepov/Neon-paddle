@@ -2,6 +2,8 @@ import Foundation
 import Network
 
 /// Доступность сети для сценария первого запуска (п. 1.3).
+///
+/// На **симуляторе** путь часто отражает сеть **Mac** (несколько интерфейсов): выключение Wi‑Fi в симуляторе может не дать `.unsatisfied`, если на Mac активен Ethernet и т.п. Для стресс‑теста офлайна удобнее Network Link Conditioner или физическое устройство.
 final class ConnectivityMonitor {
     static let shared = ConnectivityMonitor()
 

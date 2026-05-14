@@ -4,6 +4,7 @@ import UIKit
 enum AppBootstrap {
     static func performLaunch(launchOptions: [UIApplication.LaunchOptionsKey: Any]?) {
         ConnectivityMonitor.shared.start()
+        WebViewOfflineRootCoordinator.start()
         AppStartupDecisionCoordinator.shared.start()
         AnalyticsServices.configureAtLaunch(launchOptions: launchOptions)
     }

@@ -4,6 +4,7 @@ import UIKit
 enum AppForegroundCoordinator {
     static func applicationDidBecomeActive() {
         AnalyticsServices.applicationDidBecomeActive()
+        WebViewOfflineRootCoordinator.syncWithConnectivityIfNeeded()
         refreshRemoteConfigIfWebViewModeAndNeeded()
         flushPendingPushForWrapperMode()
     }
