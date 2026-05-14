@@ -380,6 +380,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 3P8SG6Q8LB;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "game-2-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Glow Bounce";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Camera access is used when you choose to take a photo to upload on the website.";
 				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "We send offers, reminders, and important updates about your activity in the app.";
@@ -423,6 +424,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 3P8SG6Q8LB;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "game-2-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Glow Bounce";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Camera access is used when you choose to take a photo to upload on the website.";
 				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "We send offers, reminders, and important updates about your activity in the app.";

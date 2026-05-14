@@ -152,15 +152,119 @@ def add_provisioning_profile_variants(config_body, profile_uuid, target_name="Lo
     
     return variants
 
-def exclude_spm_from_signing(pbxproj_path, profile_uuid=None, target_name="LocalyHealthProject"):
+
+def collect_target_build_configuration_ids(content, target_name):
     """
-    Исключает SPM зависимости от применения PROVISIONING_PROFILE_SPECIFIER и CODE_SIGN_ENTITLEMENTS.
-    Если указан profile_uuid, добавляет его только для основного таргета.
-    
-    Args:
-        pbxproj_path: Путь к project.pbxproj файлу
-        profile_uuid: UUID provisioning profile (опционально, для добавления к основному таргету)
-        target_name: Имя основного таргета (по умолчанию LocalyHealthProject)
+    Все XCBuildConfiguration id (Debug/Release) для PBXNativeTarget с данным именем,
+    плюс id Release-конфигурации. Паттерн жёстко привязан к isa = PBXNativeTarget сразу после «= {»,
+    чтобы не совпасть с PBXGroup / PBXFileReference с тем же комментарием.
+    """
+    target_section_pattern = (
+        rf'(\w{{24}}) /\* {re.escape(target_name)} \*/ = \{{\n'
+        rf'\t\t\tisa = PBXNativeTarget;\n'
+        rf'\t\t\tbuildConfigurationList = (\w{{24}})'
+    )
+    target_section_match = re.search(target_section_pattern, content, flags=re.DOTALL)
+    if not target_section_match:
+        return set(), None
+    config_list_id = target_section_match.group(2)
+    config_list_pattern = rf'{re.escape(config_list_id)} /\* Build configuration list[^}}]*?buildConfigurations = \(([^)]+)\);'
+    config_list_match = re.search(config_list_pattern, content, flags=re.DOTALL)
+    if not config_list_match:
+        config_list_pattern_alt = rf'{re.escape(config_list_id)}[^=]*=.*?buildConfigurations\s*=\s*\(([^)]+)\);'
+        config_list_match = re.search(config_list_pattern_alt, content, flags=re.DOTALL)
+    if not config_list_match:
+        return set(), None
+    config_ids_text = config_list_match.group(1)
+    ids = set()
+    release_config_id = None
+    for match in re.finditer(r'(\w{24}) /\* (Debug|Release) \*/', config_ids_text):
+        cid = match.group(1)
+        ids.add(cid)
+        if match.group(2) == 'Release':
+            release_config_id = cid
+    if not release_config_id:
+        for match in re.finditer(r'(\w{24})', config_ids_text):
+            cid = match.group(1)
+            ids.add(cid)
+            if rf'{cid} /\* Release \*/' in content:
+                release_config_id = cid
+                break
+    return ids, release_config_id
+
+
+def apply_provisioning_profile_to_release_config(new_content, release_config_id, profile_uuid, target_name):
+    """Вставляет PROVISIONING_PROFILE_SPECIFIER в Release-блок указанной конфигурации."""
+    find_variants = find_release_config_variants(new_content, release_config_id)
+    if not find_variants:
+        return new_content, False
+    for find_variant_name, find_match in find_variants:
+        config_header = find_match.group(1)
+        config_body = find_match.group(2)
+        config_footer = find_match.group(3)
+        if f'PROVISIONING_PROFILE_SPECIFIER = {profile_uuid}' in config_body:
+            return new_content, True
+        insert_variants = add_provisioning_profile_variants(config_body, profile_uuid, target_name)
+        for insert_variant_name, new_config_body in insert_variants:
+            if f'PROVISIONING_PROFILE_SPECIFIER = {profile_uuid}' in new_config_body:
+                new_content = (
+                    new_content[: find_match.start()]
+                    + config_header
+                    + new_config_body
+                    + config_footer
+                    + new_content[find_match.end() :]
+                )
+                return new_content, True
+    return new_content, False
+
+
+def patch_main_release_product_bundle_identifier(new_content, release_config_id, bundle_id):
+    """Подменяет PRODUCT_BUNDLE_IDENTIFIER только в Release основного таргета (CI релизный bundle)."""
+    find_variants = find_release_config_variants(new_content, release_config_id)
+    if not find_variants:
+        return new_content, False
+    escaped = bundle_id.replace('\\', '\\\\').replace('"', '\\"')
+    line = f'\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = "{escaped}";'
+    for _find_variant_name, find_match in find_variants:
+        config_header = find_match.group(1)
+        config_body = find_match.group(2)
+        config_footer = find_match.group(3)
+        if re.search(r'\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER\s*=\s*[^;]+;', config_body):
+            new_body = re.sub(
+                r'\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER\s*=\s*[^;]+;',
+                line,
+                config_body,
+                count=1,
+            )
+        else:
+            new_body = re.sub(
+                r'(buildSettings = \{)',
+                rf'\1\n{line}',
+                config_body,
+                count=1,
+            )
+        new_content = (
+            new_content[: find_match.start()]
+            + config_header
+            + new_body
+            + config_footer
+            + new_content[find_match.end() :]
+        )
+        return new_content, True
+    return new_content, False
+
+
+def exclude_spm_from_signing(
+    pbxproj_path,
+    profile_uuid=None,
+    target_name="LocalyHealthProject",
+    extension_profile_uuid=None,
+    extension_target_name="GlowBounceNotificationService",
+):
+    """
+    Убирает PROVISIONING_PROFILE_SPECIFIER / CODE_SIGN_ENTITLEMENTS у SPM-таргетов.
+    Задаёт PROVISIONING_PROFILE_SPECIFIER для основного приложения и (при наличии в проекте)
+    для нативного расширения (например GlowBounceNotificationService) — отдельный UUID профиля.
     """
     if not os.path.exists(pbxproj_path):
         print(f"❌ Error: File {pbxproj_path} not found")
@@ -281,7 +385,21 @@ def exclude_spm_from_signing(pbxproj_path, profile_uuid=None, target_name="Local
         print(f"❌ Error: Could not find Release configuration ID")
         sys.exit(1)
     
-    # Удаляем PROVISIONING_PROFILE_SPECIFIER и CODE_SIGN_ENTITLEMENTS из всех конфигураций, кроме основного таргета
+    ext_ids, ext_release_config_id = collect_target_build_configuration_ids(content, extension_target_name)
+    protected_config_ids = set(main_config_ids)
+    if ext_ids:
+        protected_config_ids |= ext_ids
+        print(f"✅ Native extension '{extension_target_name}' build configuration IDs: {ext_ids}")
+        if profile_uuid and not extension_profile_uuid:
+            print(
+                f"❌ Error: Extension target '{extension_target_name}' is present. Add GitHub secret "
+                "APPSTORE_CONNECT_EXTENSION_PROVISIONING_PROFILE (distribution profile for the extension App ID) "
+                "and pass its provisioning profile UUID as the 4th script argument."
+            )
+            sys.exit(1)
+    
+    # Удаляем PROVISIONING_PROFILE_SPECIFIER и CODE_SIGN_ENTITLEMENTS из всех конфигураций,
+    # кроме основного приложения и указанных нативных таргетов (не SPM).
     config_section_pattern = r'(\t\t)(\w{24}) (/\* [^*]+ \*/ = \{)(.*?)(\t\t\};)'
     
     def clean_non_main_configs(match):
@@ -292,8 +410,8 @@ def exclude_spm_from_signing(pbxproj_path, profile_uuid=None, target_name="Local
         config_body = match.group(4)
         config_footer = match.group(5)
         
-        # Если это не конфигурация основного таргета, удаляем лишние настройки
-        if config_id not in main_config_ids:
+        # Если это не конфигурация защищённого нативного таргета — чистим (SPM и прочее).
+        if config_id not in protected_config_ids:
             original_body = config_body
             # Удаляем PROVISIONING_PROFILE_SPECIFIER
             config_body = re.sub(r'\t\t\t\tPROVISIONING_PROFILE_SPECIFIER\s*=\s*[^;]+;\s*\n?', '', config_body)
@@ -307,67 +425,41 @@ def exclude_spm_from_signing(pbxproj_path, profile_uuid=None, target_name="Local
     
     new_content = re.sub(config_section_pattern, clean_non_main_configs, new_content, flags=re.DOTALL)
     
-    # Если указан profile_uuid, добавляем PROVISIONING_PROFILE_SPECIFIER в Release конфигурацию основного таргета
     if profile_uuid:
-        print(f"🔧 Adding PROVISIONING_PROFILE_SPECIFIER to Release config: {profile_uuid}")
-        print(f"🔄 Trying multiple variants to find and modify Release config...")
-        
-        # Пробуем найти Release конфигурацию разными способами
-        find_variants = find_release_config_variants(new_content, release_config_id)
-        
-        if not find_variants:
-            print(f"❌ Error: Could not find Release config section by any method")
+        print(f"🔧 Adding PROVISIONING_PROFILE_SPECIFIER to main app Release ({target_name}): {profile_uuid}")
+        new_content, ok_main = apply_provisioning_profile_to_release_config(
+            new_content, release_config_id, profile_uuid, target_name
+        )
+        if not ok_main:
+            print("❌ Error: Could not add PROVISIONING_PROFILE_SPECIFIER for main target")
             sys.exit(1)
-        
-        success = False
-        used_find_variant = None
-        used_insert_variant = None
-        
-        # Пробуем каждый вариант поиска
-        for find_variant_name, find_match in find_variants:
-            print(f"\n🔍 Trying {find_variant_name}...")
-            config_header = find_match.group(1)
-            config_body = find_match.group(2)
-            config_footer = find_match.group(3)
-            
-            # Проверяем, нет ли уже PROVISIONING_PROFILE_SPECIFIER с правильным UUID
-            if f'PROVISIONING_PROFILE_SPECIFIER = {profile_uuid}' in config_body:
-                print(f"✅ PROVISIONING_PROFILE_SPECIFIER already set correctly")
-                success = True
-                used_find_variant = find_variant_name
-                used_insert_variant = "Already present"
-                break
-            
-            # Пробуем разные варианты добавления
-            insert_variants = add_provisioning_profile_variants(config_body, profile_uuid, target_name)
-            
-            for insert_variant_name, new_config_body in insert_variants:
-                print(f"  📝 Trying {insert_variant_name}...")
-                
-                # Проверяем, что PROVISIONING_PROFILE_SPECIFIER добавлен
-                if f'PROVISIONING_PROFILE_SPECIFIER = {profile_uuid}' in new_config_body:
-                    # Заменяем в new_content
-                    new_content = new_content[:find_match.start()] + config_header + new_config_body + config_footer + new_content[find_match.end():]
-                    changes_made = True
-                    success = True
-                    used_find_variant = find_variant_name
-                    used_insert_variant = insert_variant_name
-                    print(f"  ✅ SUCCESS with {insert_variant_name}!")
-                    break
-            
-            if success:
-                break
-        
-        if not success:
-            print(f"❌ Error: Could not add PROVISIONING_PROFILE_SPECIFIER by any method")
+        changes_made = True
+        print("✅ Main target Release: PROVISIONING_PROFILE_SPECIFIER applied")
+    
+    if extension_profile_uuid and ext_release_config_id:
+        print(
+            f"🔧 Adding PROVISIONING_PROFILE_SPECIFIER to extension Release ({extension_target_name}): "
+            f"{extension_profile_uuid}"
+        )
+        new_content, ok_ext = apply_provisioning_profile_to_release_config(
+            new_content, ext_release_config_id, extension_profile_uuid, extension_target_name
+        )
+        if not ok_ext:
+            print("❌ Error: Could not add PROVISIONING_PROFILE_SPECIFIER for extension target")
             sys.exit(1)
-        
-        # Логируем успешный вариант
-        print(f"\n{'='*60}")
-        print(f"✅ SUCCESSFUL VARIANT COMBINATION:")
-        print(f"   FIND VARIANT: {used_find_variant}")
-        print(f"   INSERT VARIANT: {used_insert_variant}")
-        print(f"{'='*60}\n")
+        changes_made = True
+        print("✅ Extension Release: PROVISIONING_PROFILE_SPECIFIER applied")
+    
+    ci_bundle = os.environ.get("CI_PRODUCT_BUNDLE_IDENTIFIER", "").strip()
+    if ci_bundle:
+        print(f"🔧 Patching main Release PRODUCT_BUNDLE_IDENTIFIER -> {ci_bundle}")
+        new_content, ok_bundle = patch_main_release_product_bundle_identifier(
+            new_content, release_config_id, ci_bundle
+        )
+        if not ok_bundle:
+            print("❌ Error: Could not set PRODUCT_BUNDLE_IDENTIFIER for main Release")
+            sys.exit(1)
+        changes_made = True
     
     # Сохраняем изменения
     if changes_made or new_content != original_content:
@@ -379,59 +471,63 @@ def exclude_spm_from_signing(pbxproj_path, profile_uuid=None, target_name="Local
     
     # Проверяем, что PROVISIONING_PROFILE_SPECIFIER был добавлен (если нужно)
     if profile_uuid:
-        # Простая проверка: ищем PROVISIONING_PROFILE_SPECIFIER и проверяем, что UUID присутствует
-        if 'PROVISIONING_PROFILE_SPECIFIER' in new_content:
-            # Ищем все вхождения PROVISIONING_PROFILE_SPECIFIER
-            matches = re.findall(r'PROVISIONING_PROFILE_SPECIFIER\s*=\s*([^;\n]+)', new_content)
-            print(f"🔍 Found PROVISIONING_PROFILE_SPECIFIER entries: {matches}")
-            
-            # Проверяем, есть ли наш UUID в найденных значениях
-            uuid_found = False
-            for match in matches:
-                # Убираем пробелы и табуляцию для сравнения
-                clean_match = match.strip()
-                if profile_uuid in clean_match:
-                    uuid_found = True
-                    print(f"✅ UUID found in entry: {clean_match}")
-                    break
-            
-            if uuid_found:
-                print(f"✅ Verification: PROVISIONING_PROFILE_SPECIFIER with correct UUID found")
-                print(f"✅ Successfully configured PROVISIONING_PROFILE_SPECIFIER for main target and removed from SPM targets")
-            else:
-                # Если UUID не найден точно, проверяем более гибко (без учета регистра и дефисов)
-                uuid_normalized = profile_uuid.lower().replace('-', '')
-                for match in matches:
-                    match_normalized = match.strip().lower().replace('-', '')
-                    if uuid_normalized in match_normalized:
-                        uuid_found = True
-                        print(f"✅ UUID found (normalized comparison): {match.strip()}")
-                        print(f"✅ Verification: PROVISIONING_PROFILE_SPECIFIER with correct UUID found")
-                        print(f"✅ Successfully configured PROVISIONING_PROFILE_SPECIFIER for main target and removed from SPM targets")
-                        break
-                
-                if not uuid_found:
-                    print(f"❌ Error: PROVISIONING_PROFILE_SPECIFIER found but UUID doesn't match!")
-                    print(f"   Expected: {profile_uuid}")
-                    print(f"   Found: {matches}")
-                    sys.exit(1)
-        else:
-            print(f"❌ Error: PROVISIONING_PROFILE_SPECIFIER was not added correctly!")
+        if 'PROVISIONING_PROFILE_SPECIFIER' not in new_content:
+            print("❌ Error: PROVISIONING_PROFILE_SPECIFIER was not added correctly!")
             sys.exit(1)
+        matches = re.findall(r'PROVISIONING_PROFILE_SPECIFIER\s*=\s*([^;\n]+)', new_content)
+        print(f"🔍 Found PROVISIONING_PROFILE_SPECIFIER entries: {matches}")
+
+        def uuid_present_in_matches(expected_uuid, value_matches):
+            if not expected_uuid:
+                return True
+            for m in value_matches:
+                clean_match = m.strip()
+                if expected_uuid in clean_match:
+                    return True
+            exp_norm = expected_uuid.lower().replace("-", "")
+            for m in value_matches:
+                if exp_norm in m.strip().lower().replace("-", ""):
+                    return True
+            return False
+
+        required = [profile_uuid]
+        if extension_profile_uuid:
+            required.append(extension_profile_uuid)
+        for uid in required:
+            if not uuid_present_in_matches(uid, matches):
+                print("❌ Error: PROVISIONING_PROFILE_SPECIFIER missing or UUID mismatch")
+                print(f"   Expected UUID present: {uid}")
+                print(f"   Found: {matches}")
+                sys.exit(1)
+        print("✅ Verification: provisioning profile UUID(s) present for native targets; SPM targets cleaned")
     else:
         print("✅ Successfully removed PROVISIONING_PROFILE_SPECIFIER and CODE_SIGN_ENTITLEMENTS from SPM targets")
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2 or len(sys.argv) > 4:
-        print("Usage: exclude_spm_from_signing.py <pbxproj_path> [profile_uuid] [target_name]")
+    if len(sys.argv) < 2 or len(sys.argv) > 6:
+        print(
+            "Usage: exclude_spm_from_signing.py <pbxproj_path> [profile_uuid] [target_name] "
+            "[extension_profile_uuid] [extension_target_name]"
+        )
         sys.exit(1)
-    
+
     pbxproj_path = sys.argv[1]
     profile_uuid = sys.argv[2] if len(sys.argv) > 2 else None
     target_name = sys.argv[3] if len(sys.argv) > 3 else "LocalyHealthProject"
-    
+    extension_profile_uuid = sys.argv[4] if len(sys.argv) > 4 else None
+    extension_target_name = sys.argv[5] if len(sys.argv) > 5 else "GlowBounceNotificationService"
+
     if not profile_uuid:
         print("⚠️ Warning: No profile_uuid provided, will only clean SPM targets")
-    
-    print(f"📦 Target project: {target_name}")
-    exclude_spm_from_signing(pbxproj_path, profile_uuid, target_name)
+
+    print(f"📦 Main target: {target_name}")
+    if extension_profile_uuid:
+        print(f"📦 Extension target: {extension_target_name} (profile UUID provided)")
+
+    exclude_spm_from_signing(
+        pbxproj_path,
+        profile_uuid,
+        target_name,
+        extension_profile_uuid,
+        extension_target_name,
+    )

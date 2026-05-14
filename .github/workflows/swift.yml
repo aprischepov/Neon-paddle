@@ -48,6 +48,30 @@ jobs:
         fi
         cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
         echo "✅ Installed provisioning profile with UUID: $UUID"
+
+    # Профиль для Notification Service Extension (отдельный App ID / bundle id)
+    - name: Install Extension Provisioning Profile
+      run: |
+        EXT_B64="${{ secrets.APPSTORE_CONNECT_EXTENSION_PROVISIONING_PROFILE }}"
+        if [ -z "$EXT_B64" ]; then
+          echo "❌ Error: Add repository secret APPSTORE_CONNECT_EXTENSION_PROVISIONING_PROFILE."
+          echo "   In Apple Developer: Profiles → Distribution for the extension target (GlowBounceNotificationService),"
+          echo "   base64-encode the .mobileprovision file and paste into the secret."
+          exit 1
+        fi
+        echo "$EXT_B64" | base64 --decode > profile_extension.mobileprovision
+        if [ ! -s profile_extension.mobileprovision ]; then
+          echo "❌ Error: Failed to decode extension provisioning profile"
+          exit 1
+        fi
+        mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles/
+        UUID_EXT=$(/usr/libexec/PlistBuddy -c 'Print UUID' /dev/stdin <<< "$(security cms -D -i profile_extension.mobileprovision)")
+        if [ -z "$UUID_EXT" ]; then
+          echo "❌ Error: Failed to extract UUID from extension provisioning profile"
+          exit 1
+        fi
+        cp profile_extension.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID_EXT.mobileprovision
+        echo "✅ Installed extension provisioning profile with UUID: $UUID_EXT"
     
     # Шаг 4: Устанавливаем сертификат Push Notifications (опционально)
     - name: Install Push Notification Certificate
@@ -206,10 +230,19 @@ jobs:
           cp "$CODE_SIGN_ENTITLEMENTS" ${{ secrets.TARGET_PROJECT }}/${{ secrets.TARGET_PROJECT }}.entitlements
         fi
         
-        # Исключаем SPM зависимости от применения лишних настроек подписи
-        # Скрипт удалит PROVISIONING_PROFILE_SPECIFIER из SPM таргетов
-        # и добавит его только для основного таргета
-        echo "🔧 Configuring signing settings: main target only, excluding SPM"
+        # Исключаем SPM от лишней подписи; основное приложение + GlowBounceNotificationService — manual + UUID профилей
+        if [ ! -f "profile_extension.mobileprovision" ]; then
+          echo "❌ Error: profile_extension.mobileprovision not found (Install Extension Provisioning Profile step)"
+          exit 1
+        fi
+        EXTENSION_PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' /dev/stdin <<< "$(security cms -D -i profile_extension.mobileprovision)")
+        if [ -z "$EXTENSION_PROFILE_UUID" ]; then
+          echo "❌ Error: Failed to read UUID from extension provisioning profile"
+          exit 1
+        fi
+        echo "✅ Extension provisioning profile UUID: $EXTENSION_PROFILE_UUID"
+        
+        echo "🔧 Configuring signing: main app + notification extension; SPM cleaned"
         
         SPM_SCRIPT=".github/scripts/exclude_spm_from_signing.py"
         if [ ! -f "$SPM_SCRIPT" ]; then
@@ -217,8 +250,8 @@ jobs:
           exit 1
         fi
         
-        # Передаем profile_uuid и имя проекта, чтобы скрипт добавил настройки только для основного таргета
-        python3 "$SPM_SCRIPT" "${{ secrets.TARGET_PROJECT }}.xcodeproj/project.pbxproj" "$PROFILE_UUID" "${{ secrets.TARGET_PROJECT }}"
+        export CI_PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID"
+        python3 "$SPM_SCRIPT" "${{ secrets.TARGET_PROJECT }}.xcodeproj/project.pbxproj" "$PROFILE_UUID" "${{ secrets.TARGET_PROJECT }}" "$EXTENSION_PROFILE_UUID"
         
         if [ $? -ne 0 ]; then
           echo "❌ Error: Failed to configure signing settings"
@@ -236,7 +269,6 @@ jobs:
           -archivePath ./output/${{ secrets.TARGET_PROJECT }}.xcarchive
           -skipPackageUpdates
           DEVELOPMENT_TEAM=${{ secrets.TEAM_ID }}
-          PRODUCT_BUNDLE_IDENTIFIER=$BUNDLE_ID
           CODE_SIGN_STYLE=Manual
           CODE_SIGN_IDENTITY="$CODE_SIGN_IDENTITY"
           COMPILER_INDEX_STORE_ENABLE=NO
@@ -246,8 +278,11 @@ jobs:
         
         xcodebuild "${XCODEBUILD_PARAMS[@]}" archive 2>&1 | tee xcodebuild.log
         
-        # Проверяем результат сборки
         BUILD_EXIT_CODE=${PIPESTATUS[0]}
+        if [ "$BUILD_EXIT_CODE" -ne 0 ]; then
+          echo "❌ Error: xcodebuild archive failed (exit $BUILD_EXIT_CODE)"
+          exit 1
+        fi
         if [ ! -d "./output/${{ secrets.TARGET_PROJECT }}.xcarchive" ]; then
           echo "❌ Error: Archive was not created"
           exit 1
@@ -289,31 +324,48 @@ jobs:
         
         echo "✅ Using profile: $PROFILE_NAME for release bundle ID: $BUNDLE_ID"
         
+        if [ ! -f "profile_extension.mobileprovision" ]; then
+          echo "❌ Error: profile_extension.mobileprovision not found"
+          exit 1
+        fi
+        security cms -D -i profile_extension.mobileprovision > /tmp/extension_profile.plist
+        EXT_APP_ID_RAW=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' /tmp/extension_profile.plist)
+        EXTENSION_BUNDLE_ID="${EXT_APP_ID_RAW#*.}"
+        EXTENSION_PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print Name' /tmp/extension_profile.plist)
+        if [ -z "$EXTENSION_BUNDLE_ID" ] || [ -z "$EXTENSION_PROFILE_NAME" ]; then
+          echo "❌ Error: Failed to read extension profile name or application-identifier"
+          exit 1
+        fi
+        echo "✅ Extension export mapping: $EXTENSION_BUNDLE_ID -> $EXTENSION_PROFILE_NAME"
+        
         cat > ExportOptions.plist <<EOF
-        <?xml version="1.0" encoding="UTF-8"?>
-        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-        <plist version="1.0">
-        <dict>
-            <key>method</key>
-            <string>app-store-connect</string>
-            <key>teamID</key>
-            <string>${{ secrets.TEAM_ID }}</string>
-            <key>signingStyle</key>
-            <string>manual</string>
-            <key>provisioningProfiles</key>
-            <dict>
-                <key>$BUNDLE_ID</key>
-                <string>$PROFILE_NAME</string>
-            </dict>
-            <key>uploadBitcode</key>
-            <false/>
-            <key>uploadSymbols</key>
-            <false/>
-        </dict>
-        </plist>
-        EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>app-store-connect</string>
+    <key>teamID</key>
+    <string>${{ secrets.TEAM_ID }}</string>
+    <key>signingStyle</key>
+    <string>manual</string>
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>$BUNDLE_ID</key>
+        <string>$PROFILE_NAME</string>
+        <key>$EXTENSION_BUNDLE_ID</key>
+        <string>$EXTENSION_PROFILE_NAME</string>
+    </dict>
+    <key>uploadBitcode</key>
+    <false/>
+    <key>uploadSymbols</key>
+    <false/>
+</dict>
+</plist>
+EOF
         
         echo "✅ Created ExportOptions.plist"
+        plutil -lint ExportOptions.plist
         cat ExportOptions.plist
     
     # Шаг 9: Экспортируем .ipa файл
