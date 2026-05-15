@@ -29,6 +29,7 @@ final class AppStartupDecisionCoordinator {
             queue: .main
         ) { note in
             guard AppStartupSettings.resolvedMode == nil else { return }
+            guard FirstLaunchConfigGate.shared.isReadyForConfigRequest else { return }
             let hasHTTP = note.userInfo?[RemoteConfigFetchService.httpStatusUserInfoKey] != nil
             if hasHTTP {
                 AppStartupSettings.setResolved(.wrapper)

@@ -15,6 +15,10 @@ final class RemoteConfigCoordinator {
             object: nil,
             queue: .main
         ) { note in
+            guard AppStartupSettings.resolvedMode != .wrapper else { return }
+            if AppStartupSettings.resolvedMode == nil, !FirstLaunchConfigGate.shared.isReadyForConfigRequest {
+                return
+            }
             let payload = note.userInfo?[AppsFlyerAttributionService.conversionPayloadUserInfoKey] as? [String: Any]
                 ?? AppsFlyerAttributionService.shared.currentConversionPayload()
             RemoteConfigFetchService.shared.performFetch(conversionPayload: payload)
@@ -22,6 +26,7 @@ final class RemoteConfigCoordinator {
     }
 
     func notifyConfigContextUpdated() {
+        guard AppStartupSettings.resolvedMode != .wrapper else { return }
         RemoteConfigFetchService.shared.requestConfigRefresh()
     }
 }

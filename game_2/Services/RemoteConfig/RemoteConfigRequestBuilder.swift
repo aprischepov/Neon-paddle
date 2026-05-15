@@ -12,10 +12,10 @@ enum RemoteConfigRequestBuilder {
 
     /// Собирает словарь для `JSONSerialization` / `URLRequest.httpBody`.
     static func postBodyDictionary(conversionPayload: [String: Any]?) -> [String: Any] {
-        var body = conversionPayload ?? [:]
+        var body = AppsFlyerConversionPayload.sanitizedAttributionPayload(conversionPayload ?? [:])
         mergeUDLPayloadIfAbsent(into: &body)
         mergeClientFieldsIfAbsent(into: &body)
-        return body
+        return AppsFlyerConversionPayload.sanitizedAttributionPayload(body)
     }
 
     static func postBodyJSONData(conversionPayload: [String: Any]?) -> Data? {
@@ -28,7 +28,9 @@ enum RemoteConfigRequestBuilder {
     /// UDL после conversion: ключи из deep link добавляются только если в conversion **ещё нет** ключа (первые данные имеют приоритет).
     private static func mergeUDLPayloadIfAbsent(into body: inout [String: Any]) {
         guard let udl = AppsFlyerUDLPayloadStore.currentPayload() else { return }
-        for (key, value) in udl {
+        let sanitized = AppsFlyerConversionPayload.sanitizedAttributionPayload(udl)
+        guard AppsFlyerConversionPayload.isSubstantiveAttributionPayload(sanitized) else { return }
+        for (key, value) in sanitized {
             guard body[key] == nil else { continue }
             body[key] = value
         }
@@ -36,7 +38,8 @@ enum RemoteConfigRequestBuilder {
 
     private static func mergeClientFieldsIfAbsent(into body: inout [String: Any]) {
         setIfAbsent("af_id", AppsFlyerLib.shared().getAppsFlyerUID(), in: &body)
-        setIfAbsent("bundle_id", Bundle.main.bundleIdentifier, in: &body)
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.igordaurenev.glowbounce.app"
+        setIfAbsent("bundle_id", bundleID, in: &body)
         setIfAbsent("os", "iOS", in: &body)
         setIfAbsent("store_id", iosStoreIdForConfig(), in: &body)
         setIfAbsent("locale", localeRFC3066Style(), in: &body)

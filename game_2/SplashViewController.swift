@@ -17,16 +17,17 @@ final class SplashViewController: UIViewController {
     }
 
     private let imageView = UIImageView()
-    private let retryButton = UIButton(type: .system)
     private var didFinishSplash = false
     private var firstLaunchPipelineStarted = false
     private var awaitingFirstLaunchRouting = false
     private var routingObserver: NSObjectProtocol?
     private var transportObserver: NSObjectProtocol?
     private var connectivityObserver: NSObjectProtocol?
+    private var configGateReadyObserver: NSObjectProtocol?
     private var maxSplashTimer: Timer?
+    private var firstLaunchConfigRequestSent = false
 
-    /// Максимальное время показа сплеша на первом запуске, если режим так и не определён.
+    /// Максимальное время первого запуска на сплеше (AF + config + переход), п. 1.3 ТЗ.
     private let firstLaunchMaximumSplashDuration: TimeInterval = 10
 
     override func viewDidLoad() {
@@ -38,21 +39,11 @@ final class SplashViewController: UIViewController {
         imageView.clipsToBounds = true
         view.addSubview(imageView)
 
-        retryButton.setTitle("Повторить", for: .normal)
-        retryButton.tintColor = .white
-        retryButton.translatesAutoresizingMaskIntoConstraints = false
-        retryButton.isHidden = true
-        retryButton.addTarget(self, action: #selector(retryTapped), for: .touchUpInside)
-        view.addSubview(retryButton)
-
         NSLayoutConstraint.activate([
             imageView.topAnchor.constraint(equalTo: view.topAnchor),
             imageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             imageView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             imageView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-
-            retryButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            retryButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
         ])
 
         updateSplashImage()
@@ -96,7 +87,6 @@ final class SplashViewController: UIViewController {
     private func completeRecurringSplashTransition() {
         guard !didFinishSplash else { return }
         didFinishSplash = true
-        retryButton.isHidden = true
         guard let window = view.window else { return }
         ApplicationFlowResolver.transitionFromSplash(window: window)
     }
@@ -105,7 +95,6 @@ final class SplashViewController: UIViewController {
         guard !firstLaunchPipelineStarted else { return }
         firstLaunchPipelineStarted = true
         awaitingFirstLaunchRouting = true
-        retryButton.isHidden = false
 
         routingObserver = NotificationCenter.default.addObserver(
             forName: .appStartupRoutingReady,
@@ -146,12 +135,26 @@ final class SplashViewController: UIViewController {
             showNoInternetRootFromSplash()
             return
         }
-        RemoteConfigFetchService.shared.requestConfigRefresh()
+
+        configGateReadyObserver = NotificationCenter.default.addObserver(
+            forName: .firstLaunchConfigGateDidBecomeReady,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.requestFirstLaunchConfigIfNeeded()
+        }
+
+        FirstLaunchConfigGate.shared.beginWaitingForAttribution(maxDuration: firstLaunchMaximumSplashDuration)
+
+        if FirstLaunchConfigGate.shared.isReadyForConfigRequest {
+            requestFirstLaunchConfigIfNeeded()
+        }
     }
 
-    @objc private func retryTapped() {
+    private func requestFirstLaunchConfigIfNeeded() {
         guard awaitingFirstLaunchRouting else { return }
-        guard ConnectivityMonitor.shared.isOnline else { return }
+        guard AppStartupSettings.resolvedMode == nil else { return }
+        firstLaunchConfigRequestSent = true
         RemoteConfigFetchService.shared.requestConfigRefresh()
     }
 
@@ -160,6 +163,7 @@ final class SplashViewController: UIViewController {
         guard AppStartupSettings.resolvedMode != nil else { return }
         maxSplashTimer?.invalidate()
         maxSplashTimer = nil
+        FirstLaunchConfigGate.shared.cancelSplashTimeout()
         finishFirstLaunchRouting()
     }
 
@@ -175,14 +179,33 @@ final class SplashViewController: UIViewController {
     private func handleFirstLaunchConnectivityChange() {
         guard awaitingFirstLaunchRouting else { return }
         if !ConnectivityMonitor.shared.isOnline {
+            guard !firstLaunchConfigRequestSent else { return }
             showNoInternetRootFromSplash()
         }
     }
 
-    /// Лимит 10 с: уходим со сплеша, чтобы не зависать при долгом ответе сервера.
+    /// Лимит 10 с: при наличии attribution или отправленном config — wrapper и переход (Organic → «No data»).
     private func handleFirstLaunchMaxSplashElapsed() {
         guard awaitingFirstLaunchRouting else { return }
-        guard AppStartupSettings.resolvedMode == nil else { return }
+        if AppStartupSettings.resolvedMode != nil {
+            handleFirstLaunchRoutingReady()
+            return
+        }
+
+        FirstLaunchConfigGate.shared.forceReadyForSplashDeadline()
+
+        let hasAttribution = AppsFlyerAttributionService.shared.currentConversionPayload() != nil
+        if hasAttribution || firstLaunchConfigRequestSent {
+            if !firstLaunchConfigRequestSent {
+                requestFirstLaunchConfigIfNeeded()
+            }
+            if AppStartupSettings.resolvedMode == nil {
+                AppStartupSettings.setResolved(.wrapper)
+            }
+            handleFirstLaunchRoutingReady()
+            return
+        }
+
         showNoInternetRootFromSplash()
     }
 
@@ -221,6 +244,10 @@ final class SplashViewController: UIViewController {
         if let connectivityObserver {
             NotificationCenter.default.removeObserver(connectivityObserver)
             self.connectivityObserver = nil
+        }
+        if let configGateReadyObserver {
+            NotificationCenter.default.removeObserver(configGateReadyObserver)
+            self.configGateReadyObserver = nil
         }
     }
 }

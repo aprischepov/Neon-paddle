@@ -175,6 +175,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private enum GameState {
         case start
         case settings
+        case leaderboard
         case playing
         case paused
         case gameOver
@@ -245,11 +246,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         static let gameModeRight = "gameModeRight"
         static let privacyButton = "privacyButton"
         static let termsButton = "termsButton"
+        static let profileCardRoot = "profileCardRoot"
         static let menuButton = "menuButton"
         static let pauseButton = "pauseButton"
         static let resumeButton = "resumeButton"
         static let exitButton = "exitButton"
         static let playAgainButton = "playAgainButton"
+        static let leaderboardButton = "leaderboardButton"
+        static let notificationsLeft = "notificationsLeft"
+        static let notificationsRight = "notificationsRight"
     }
 
     private var paddleSize: CGSize {
@@ -302,7 +307,31 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var scoreboardLabel: SKLabelNode?
     private var difficultyValueLabel: SKLabelNode?
     private var gameModeValueLabel: SKLabelNode?
+    private var notificationsValueLabel: SKLabelNode?
+    private var notificationsEnabled = false
+    private var profileCardHandles: GameSettingsProfileCard.Handles?
+    private var profilePhotoCoordinator: PlayerProfilePhotoPickerCoordinator?
     private var overlayNode: SKNode?
+
+    private var settingsScrollRoot: SKNode?
+    private var settingsScrollCrop: SKCropNode?
+    private var settingsScrollY: CGFloat = 0
+    private var settingsScrollMinY: CGFloat = 0
+    private var settingsScrollMaxY: CGFloat = 0
+    private var settingsVisibleHalfHeight: CGFloat = 0
+    private var settingsPanBegan: CGPoint?
+    private var settingsLastTouchY: CGFloat = 0
+    private var settingsDragActive = false
+
+    private var leaderboardScrollRoot: SKNode?
+    private var leaderboardScrollCrop: SKCropNode?
+    private var leaderboardScrollY: CGFloat = 0
+    private var leaderboardScrollMinY: CGFloat = 0
+    private var leaderboardScrollMaxY: CGFloat = 0
+    private var leaderboardVisibleHalfHeight: CGFloat = 0
+    private var leaderboardPanBegan: CGPoint?
+    private var leaderboardLastTouchY: CGFloat = 0
+    private var leaderboardDragActive = false
     private var startTime: TimeInterval = 0
     private var lastUpdateTime: TimeInterval = 0
     private var lastDifficultyStep = 0
@@ -390,6 +419,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             showStartScreen()
         case .settings:
             showSettingsScreen()
+        case .leaderboard:
+            showLeaderboardScreen()
         case .playing:
             rebuildPlayingSceneForCurrentLayout(previousSafeFrame: previousSafeFrame)
         case .paused:
@@ -549,6 +580,151 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         lastLayoutSafeFrame = safeFrame
     }
 
+    private func makeVerticalScrollChrome(
+        in overlay: SKNode,
+        safeFrame: CGRect,
+        contentTop: CGFloat,
+        contentBottom: CGFloat
+    ) -> (crop: SKCropNode, scrollRoot: SKNode, visibleMidY: CGFloat, halfHeight: CGFloat) {
+        let low = min(contentTop, contentBottom)
+        let high = max(contentTop, contentBottom)
+        let visibleH = max(120, high - low)
+        let visibleMidY = (high + low) * 0.5
+        let maskW = max(80, safeFrame.width - 24)
+        let maskH = max(100, visibleH - 12)
+        let halfH = maskH * 0.5
+
+        let mask = SKShapeNode(rectOf: CGSize(width: maskW, height: maskH), cornerRadius: 12)
+        mask.fillColor = .white
+
+        let crop = SKCropNode()
+        crop.maskNode = mask
+        crop.position = CGPoint(x: safeFrame.midX, y: visibleMidY)
+        crop.zPosition = 0
+
+        let scrollRoot = SKNode()
+        scrollRoot.zPosition = 1
+        crop.addChild(scrollRoot)
+        overlay.addChild(crop)
+        return (crop, scrollRoot, visibleMidY, halfH)
+    }
+
+    private func finalizeVerticalScroll(scrollRoot: SKNode, halfHeight: CGFloat) -> (y: CGFloat, minY: CGFloat, maxY: CGFloat) {
+        scrollRoot.position.y = 0
+        let rect = scrollRoot.calculateAccumulatedFrame()
+        let pad: CGFloat = 6
+        let vmin = -halfHeight + pad
+        let vmax = halfHeight - pad
+        let a = vmin - rect.minY
+        let b = vmax - rect.maxY
+        let lo = min(a, b)
+        let hi = max(a, b)
+        if hi - lo < 2 {
+            let c = -(rect.minY + rect.maxY) * 0.5
+            scrollRoot.position.y = c
+            return (c, c, c)
+        }
+        let y0 = hi
+        let clamped = min(max(y0, lo), hi)
+        scrollRoot.position.y = clamped
+        return (clamped, lo, hi)
+    }
+
+    private func applySettingsScroll(deltaY: CGFloat) {
+        guard let root = settingsScrollRoot else { return }
+        guard settingsScrollMaxY - settingsScrollMinY > 1 else { return }
+        settingsScrollY = min(max(settingsScrollY + deltaY, settingsScrollMinY), settingsScrollMaxY)
+        root.position.y = settingsScrollY
+    }
+
+    private func applyLeaderboardScroll(deltaY: CGFloat) {
+        guard let root = leaderboardScrollRoot else { return }
+        guard leaderboardScrollMaxY - leaderboardScrollMinY > 1 else { return }
+        leaderboardScrollY = min(max(leaderboardScrollY + deltaY, leaderboardScrollMinY), leaderboardScrollMaxY)
+        root.position.y = leaderboardScrollY
+    }
+
+    /// Пикеры, блок профиля и кнопка лидерборда — единая вертикальная раскладка (портрет и ландшафт).
+    private func layoutSettingsScrollBody(
+        in scrollRoot: SKNode,
+        layoutMidY: CGFloat,
+        contentTop: CGFloat,
+        rowWidth: CGFloat,
+        leaderHeight: CGFloat
+    ) {
+        let pickerRowSpacing: CGFloat = isLandscapeLayout ? 50 : 62
+        let leaderHalf = leaderHeight * 0.5
+        let plateHalf = GameSettingsProfileCard.Metrics.plateHalfHeight(isPortrait: !isLandscapeLayout)
+        let profileCaptionSize: CGFloat = isLandscapeLayout ? 11 : 12
+
+        var valueY = contentTop - (isLandscapeLayout ? 40 : 54)
+
+        createSettingsPicker(
+            title: "Difficulty",
+            value: selectedDifficulty.title,
+            y: valueY,
+            leftName: NodeName.difficultyLeft,
+            rightName: NodeName.difficultyRight,
+            in: scrollRoot,
+            layoutMidY: layoutMidY
+        ) { [weak self] label in
+            self?.difficultyValueLabel = label
+        }
+        valueY -= pickerRowSpacing
+
+        createSettingsPicker(
+            title: "Mode",
+            value: selectedGameMode.title,
+            y: valueY,
+            leftName: NodeName.gameModeLeft,
+            rightName: NodeName.gameModeRight,
+            in: scrollRoot,
+            layoutMidY: layoutMidY
+        ) { [weak self] label in
+            self?.gameModeValueLabel = label
+        }
+        valueY -= pickerRowSpacing
+
+        createSettingsPicker(
+            title: "Notifications",
+            value: GameNotificationPreferenceStore.notificationsPickerTitle(isEnabled: notificationsEnabled),
+            y: valueY,
+            leftName: NodeName.notificationsLeft,
+            rightName: NodeName.notificationsRight,
+            in: scrollRoot,
+            layoutMidY: layoutMidY
+        ) { [weak self] label in
+            self?.notificationsValueLabel = label
+        }
+        valueY -= pickerRowSpacing + (isLandscapeLayout ? 18 : 22)
+
+        let profileCaption = makeLabel(text: "PROFILE", size: profileCaptionSize, weight: .semibold)
+        profileCaption.alpha = GameMenuAppearance.pickerSectionTitleAlpha
+        profileCaption.position = CGPoint(x: 0, y: valueY - layoutMidY)
+        scrollRoot.addChild(profileCaption)
+        valueY -= isLandscapeLayout ? 14 : 16
+
+        let profileCenterY = valueY - plateHalf
+        profileCardHandles = GameSettingsProfileCard.attach(
+            to: scrollRoot,
+            layout: isLandscapeLayout
+                ? .landscape(cardCenter: CGPoint(x: 0, y: profileCenterY - layoutMidY), cardWidth: rowWidth)
+                : .portrait(cardCenter: CGPoint(x: 0, y: profileCenterY - layoutMidY), cardWidth: rowWidth)
+        )
+        valueY = profileCenterY - plateHalf - (isLandscapeLayout ? 22 : 26)
+
+        let leaderboardCenterY = valueY - leaderHalf
+        let leaderboardButton = makeButton(
+            title: "LEADERBOARD",
+            name: NodeName.leaderboardButton,
+            buttonSize: CGSize(width: rowWidth, height: leaderHeight),
+            titleSize: 16
+        )
+        leaderboardButton.alpha = 0.92
+        leaderboardButton.position = CGPoint(x: 0, y: leaderboardCenterY - layoutMidY)
+        scrollRoot.addChild(leaderboardButton)
+    }
+
     private func showSettingsScreen() {
         isPaused = false
         removeAllChildren()
@@ -568,49 +744,217 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         let titleLabel = makeLabel(text: "SETTINGS", size: isLandscapeLayout ? 34 : 40, weight: .bold)
         titleLabel.alpha = 0.94
-        titleLabel.position = CGPoint(x: safeFrame.midX, y: safeFrame.midY + (isLandscapeLayout ? 104 : 170))
+        titleLabel.zPosition = 2
+
+        let laneWidth = min(safeFrame.width - 48, 520)
+        let cardWidth = min(safeFrame.width - 32, 360)
+        let legalRowH: CGFloat = isLandscapeLayout ? 44 : 46
+        let leaderHeight: CGFloat = isLandscapeLayout ? 44 : 46
+        let backHeight: CGFloat = isLandscapeLayout ? 48 : 50
+        let backButtonHalfH = backHeight * 0.5
+        let pairGap: CGFloat = 12
+
+        let backY: CGFloat
+        let legalY: CGFloat
+        let pairW: CGFloat
+
+        if isLandscapeLayout {
+            titleLabel.position = CGPoint(x: safeFrame.midX, y: safeFrame.midY + 104)
+            legalY = safeFrame.midY - 174
+            backY = safeFrame.midY - 220
+            pairW = (laneWidth - pairGap) * 0.5
+        } else {
+            titleLabel.position = CGPoint(x: safeFrame.midX, y: safeFrame.maxY - 36)
+            backY = safeFrame.minY + 28 + backButtonHalfH
+            legalY = backY + 56
+            pairW = (cardWidth - pairGap) * 0.5
+        }
+
         settingsOverlay.addChild(titleLabel)
 
-        createSettingsPicker(
-            title: "Difficulty",
-            value: selectedDifficulty.title,
-            y: safeFrame.midY + (isLandscapeLayout ? 42 : 88),
-            leftName: NodeName.difficultyLeft,
-            rightName: NodeName.difficultyRight,
-            in: settingsOverlay
-        ) { [weak self] label in
-            self?.difficultyValueLabel = label
+        let contentBottom = legalY + legalRowH * 0.5 + 12
+        let contentTop = titleLabel.position.y - (isLandscapeLayout ? 18 : 22)
+        let scrollChrome = makeVerticalScrollChrome(
+            in: settingsOverlay,
+            safeFrame: safeFrame,
+            contentTop: contentTop,
+            contentBottom: contentBottom
+        )
+        let scrollRoot = scrollChrome.scrollRoot
+        let layoutMidY = scrollChrome.visibleMidY
+        settingsScrollCrop = scrollChrome.crop
+        settingsScrollRoot = scrollRoot
+        settingsVisibleHalfHeight = scrollChrome.halfHeight
+
+        layoutSettingsScrollBody(
+            in: scrollRoot,
+            layoutMidY: layoutMidY,
+            contentTop: contentTop,
+            rowWidth: isLandscapeLayout ? laneWidth : cardWidth,
+            leaderHeight: leaderHeight
+        )
+
+        if isLandscapeLayout {
+            let privacyButton = makeButton(
+                title: "PRIVACY",
+                name: NodeName.privacyButton,
+                buttonSize: CGSize(width: pairW, height: legalRowH),
+                titleSize: 14
+            )
+            privacyButton.position = CGPoint(x: safeFrame.midX - pairGap * 0.5 - pairW * 0.5, y: legalY)
+            settingsOverlay.addChild(privacyButton)
+
+            let termsButton = makeButton(
+                title: "TERMS",
+                name: NodeName.termsButton,
+                buttonSize: CGSize(width: pairW, height: legalRowH),
+                titleSize: 14
+            )
+            termsButton.position = CGPoint(x: safeFrame.midX + pairGap * 0.5 + pairW * 0.5, y: legalY)
+            settingsOverlay.addChild(termsButton)
+
+            let backButton = makeButton(
+                title: "BACK",
+                name: NodeName.backButton,
+                buttonSize: CGSize(width: laneWidth, height: backHeight),
+                titleSize: 18
+            )
+            backButton.alpha = 0.88
+            backButton.position = CGPoint(x: safeFrame.midX, y: backY)
+            settingsOverlay.addChild(backButton)
+        } else {
+            let privacyButton = makeButton(
+                title: "PRIVACY",
+                name: NodeName.privacyButton,
+                buttonSize: CGSize(width: pairW, height: legalRowH),
+                titleSize: 14
+            )
+            privacyButton.position = CGPoint(x: safeFrame.midX - pairGap * 0.5 - pairW * 0.5, y: legalY)
+            settingsOverlay.addChild(privacyButton)
+
+            let termsButton = makeButton(
+                title: "TERMS",
+                name: NodeName.termsButton,
+                buttonSize: CGSize(width: pairW, height: legalRowH),
+                titleSize: 14
+            )
+            termsButton.position = CGPoint(x: safeFrame.midX + pairGap * 0.5 + pairW * 0.5, y: legalY)
+            settingsOverlay.addChild(termsButton)
+
+            let backButton = makeButton(
+                title: "BACK",
+                name: NodeName.backButton,
+                buttonSize: CGSize(width: cardWidth, height: backHeight),
+                titleSize: 18
+            )
+            backButton.alpha = 0.88
+            backButton.position = CGPoint(x: safeFrame.midX, y: backY)
+            settingsOverlay.addChild(backButton)
         }
 
-        createSettingsPicker(
-            title: "Mode",
-            value: selectedGameMode.title,
-            y: safeFrame.midY + (isLandscapeLayout ? -26 : 6),
-            leftName: NodeName.gameModeLeft,
-            rightName: NodeName.gameModeRight,
-            in: settingsOverlay
-        ) { [weak self] label in
-            self?.gameModeValueLabel = label
-        }
+        let scrollLimits = finalizeVerticalScroll(scrollRoot: scrollRoot, halfHeight: settingsVisibleHalfHeight)
+        settingsScrollY = scrollLimits.y
+        settingsScrollMinY = scrollLimits.minY
+        settingsScrollMaxY = scrollLimits.maxY
 
-        let legalY = safeFrame.midY + (isLandscapeLayout ? -96 : -88)
-        let privacyButton = makeButton(title: "PRIVACY", name: NodeName.privacyButton)
-        privacyButton.setScale(0.76)
-        privacyButton.position = CGPoint(x: safeFrame.midX - 78, y: legalY)
-        settingsOverlay.addChild(privacyButton)
+        settingsOverlay.run(.fadeIn(withDuration: 0.3))
+        hasPresentedInitialLayout = true
+        lastLayoutSafeFrame = safeFrame
+    }
 
-        let termsButton = makeButton(title: "TERMS", name: NodeName.termsButton)
-        termsButton.setScale(0.76)
-        termsButton.position = CGPoint(x: safeFrame.midX + 78, y: legalY)
-        settingsOverlay.addChild(termsButton)
+    private func showLeaderboardScreen() {
+        isPaused = false
+        removeAllChildren()
+        clearGameReferences()
+        physicsWorld.speed = 0
+        gameState = .leaderboard
+        createWorldNode()
+        setupBackground()
+        createBlurredBackdrop(zPosition: 60)
 
+        let safeFrame = self.safeFrame
+        let overlay = SKNode()
+        overlay.zPosition = 90
+        overlay.alpha = 0
+        addChild(overlay)
+        overlayNode = overlay
+
+        let title = makeLabel(text: "LEADERBOARD", size: isLandscapeLayout ? 30 : 34, weight: .bold)
+        title.alpha = 0.94
+        title.zPosition = 2
+        title.position = CGPoint(x: safeFrame.midX, y: safeFrame.maxY - (isLandscapeLayout ? 36 : 42))
+        overlay.addChild(title)
+
+        let backY = safeFrame.minY + (isLandscapeLayout ? 44 : 52)
         let backButton = makeButton(title: "BACK", name: NodeName.backButton)
         backButton.setScale(0.78)
         backButton.alpha = 0.84
-        backButton.position = CGPoint(x: safeFrame.midX, y: safeFrame.midY + (isLandscapeLayout ? -154 : -168))
-        settingsOverlay.addChild(backButton)
+        backButton.position = CGPoint(x: safeFrame.midX, y: backY)
+        backButton.zPosition = 3
 
-        settingsOverlay.run(.fadeIn(withDuration: 0.3))
+        let contentTop = title.position.y - 18
+        let contentBottom = backY + 34
+        let lbChrome = makeVerticalScrollChrome(
+            in: overlay,
+            safeFrame: safeFrame,
+            contentTop: contentTop,
+            contentBottom: contentBottom
+        )
+        let lbRoot = lbChrome.scrollRoot
+        leaderboardScrollCrop = lbChrome.crop
+        leaderboardScrollRoot = lbRoot
+        leaderboardVisibleHalfHeight = lbChrome.halfHeight
+        let lm = lbChrome.visibleMidY
+
+        var y = safeFrame.maxY - (isLandscapeLayout ? 86 : 98)
+        let summaryLines = [
+            "TOTAL POINTS: \(LocalLeaderboardStore.totalPoints)",
+            "WIN STREAK: \(LocalLeaderboardStore.currentWinStreak)    BEST: \(LocalLeaderboardStore.bestWinStreak)",
+            "WIN +\(LocalLeaderboardStore.pointsPerWin)    LOSS +\(LocalLeaderboardStore.pointsPerLoss)",
+        ]
+        for line in summaryLines {
+            let lab = makeLabel(text: line, size: isLandscapeLayout ? 14 : 15, weight: .semibold)
+            lab.alpha = 0.88
+            lab.horizontalAlignmentMode = .center
+            lab.position = CGPoint(x: 0, y: y - lm)
+            lbRoot.addChild(lab)
+            y -= isLandscapeLayout ? 24 : 26
+        }
+
+        y -= 10
+        let sub = makeLabel(text: "RECENT (DATE · DIFF/MODE · RESULT · PTS)", size: 11, weight: .semibold)
+        sub.alpha = GameMenuAppearance.pickerSectionTitleAlpha
+        sub.horizontalAlignmentMode = .center
+        sub.position = CGPoint(x: 0, y: y - lm)
+        lbRoot.addChild(sub)
+        y -= 22
+
+        let rows = LocalLeaderboardStore.matchTableRows(limit: 12)
+        if rows.isEmpty {
+            let empty = makeLabel(text: "No matches yet — win a game!", size: 14, weight: .medium)
+            empty.alpha = 0.55
+            empty.horizontalAlignmentMode = .center
+            empty.position = CGPoint(x: 0, y: y - lm)
+            lbRoot.addChild(empty)
+        } else {
+            for row in rows {
+                let lab = makeLabel(text: row, size: isLandscapeLayout ? 12 : 13, weight: .medium)
+                lab.alpha = 0.82
+                lab.horizontalAlignmentMode = .center
+                lab.position = CGPoint(x: 0, y: y - lm)
+                lbRoot.addChild(lab)
+                y -= isLandscapeLayout ? 18 : 20
+            }
+        }
+
+        let lbLimits = finalizeVerticalScroll(scrollRoot: lbRoot, halfHeight: leaderboardVisibleHalfHeight)
+        leaderboardScrollY = lbLimits.y
+        leaderboardScrollMinY = lbLimits.minY
+        leaderboardScrollMaxY = lbLimits.maxY
+
+        overlay.addChild(backButton)
+
+        overlay.run(.fadeIn(withDuration: 0.25))
         hasPresentedInitialLayout = true
         lastLayoutSafeFrame = safeFrame
     }
@@ -627,7 +971,24 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         scoreboardLabel = nil
         difficultyValueLabel = nil
         gameModeValueLabel = nil
+        notificationsValueLabel = nil
+        profileCardHandles = nil
+        profilePhotoCoordinator = nil
         overlayNode = nil
+        settingsScrollRoot = nil
+        settingsScrollCrop = nil
+        settingsScrollY = 0
+        settingsScrollMinY = 0
+        settingsScrollMaxY = 0
+        settingsPanBegan = nil
+        settingsDragActive = false
+        leaderboardScrollRoot = nil
+        leaderboardScrollCrop = nil
+        leaderboardScrollY = 0
+        leaderboardScrollMinY = 0
+        leaderboardScrollMaxY = 0
+        leaderboardPanBegan = nil
+        leaderboardDragActive = false
         pausedBallVelocity = nil
         isCountingDown = false
         playerHasShield = false
@@ -655,6 +1016,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         } else if let gameMode = GameMode(rawValue: defaults.integer(forKey: SettingsKey.gameMode)) {
             selectedGameMode = gameMode
         }
+
+        notificationsEnabled = GameNotificationPreferenceStore.isUserRemoteNotificationsEnabled
     }
 
     private func saveSettings() {
@@ -693,22 +1056,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         valueHandler: (SKLabelNode) -> Void
     ) {
         let safeFrame = self.safeFrame
-        let titleLabel = makeLabel(text: title.uppercased(), size: 13, weight: .semibold)
-        titleLabel.alpha = 0.52
+        let titleLabel = makeLabel(text: title.uppercased(), size: 12, weight: .semibold)
+        titleLabel.alpha = GameMenuAppearance.pickerSectionTitleAlpha
         titleLabel.position = CGPoint(x: safeFrame.midX, y: y + 28)
         addChild(titleLabel)
 
-        let leftArrow = makeLabel(text: "<", size: 34, weight: .bold)
+        let leftArrow = makeLabel(text: "<", size: 30, weight: .semibold)
         leftArrow.name = leftName
         leftArrow.position = CGPoint(x: safeFrame.midX - 112, y: y - 2)
         addChild(leftArrow)
 
-        let valueLabel = makeLabel(text: value, size: 30, weight: .light)
+        let valueLabel = makeLabel(text: value, size: 28, weight: .medium)
         valueLabel.position = CGPoint(x: safeFrame.midX, y: y)
         addChild(valueLabel)
         valueHandler(valueLabel)
 
-        let rightArrow = makeLabel(text: ">", size: 34, weight: .bold)
+        let rightArrow = makeLabel(text: ">", size: 30, weight: .semibold)
         rightArrow.name = rightName
         rightArrow.position = CGPoint(x: safeFrame.midX + 112, y: y - 2)
         addChild(rightArrow)
@@ -721,28 +1084,44 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         leftName: String,
         rightName: String,
         in parent: SKNode,
+        layoutMidY: CGFloat? = nil,
         valueHandler: (SKLabelNode) -> Void
     ) {
         let safeFrame = self.safeFrame
-        let titleLabel = makeLabel(text: title.uppercased(), size: isLandscapeLayout ? 12 : 13, weight: .semibold)
-        titleLabel.alpha = 0.58
-        titleLabel.position = CGPoint(x: safeFrame.midX, y: y + (isLandscapeLayout ? 23 : 28))
+        let baseX: CGFloat = layoutMidY == nil ? safeFrame.midX : 0
+        func ty(_ sceneY: CGFloat) -> CGFloat {
+            guard let lm = layoutMidY else { return sceneY }
+            return sceneY - lm
+        }
+
+        let titleLabel = makeLabel(
+            text: title.uppercased(),
+            size: GameMenuAppearance.pickerTitleSize(isLandscape: isLandscapeLayout),
+            weight: .semibold
+        )
+        titleLabel.alpha = GameMenuAppearance.pickerSectionTitleAlpha
+        titleLabel.position = CGPoint(x: baseX, y: ty(y + (isLandscapeLayout ? 23 : 28)))
         parent.addChild(titleLabel)
 
         let arrowOffset = isLandscapeLayout ? min(safeFrame.width * 0.14, 124) : 112
-        let leftArrow = makeLabel(text: "<", size: isLandscapeLayout ? 30 : 34, weight: .bold)
+        let arrowSize = GameMenuAppearance.pickerArrowSize(isLandscape: isLandscapeLayout)
+        let leftArrow = makeLabel(text: "<", size: arrowSize, weight: .semibold)
         leftArrow.name = leftName
-        leftArrow.position = CGPoint(x: safeFrame.midX - arrowOffset, y: y - 2)
+        leftArrow.position = CGPoint(x: baseX - arrowOffset, y: ty(y - 2))
         parent.addChild(leftArrow)
 
-        let valueLabel = makeLabel(text: value, size: isLandscapeLayout ? 26 : 30, weight: .light)
-        valueLabel.position = CGPoint(x: safeFrame.midX, y: y)
+        let valueLabel = makeLabel(
+            text: value,
+            size: GameMenuAppearance.pickerValueSize(isLandscape: isLandscapeLayout),
+            weight: .medium
+        )
+        valueLabel.position = CGPoint(x: baseX, y: ty(y))
         parent.addChild(valueLabel)
         valueHandler(valueLabel)
 
-        let rightArrow = makeLabel(text: ">", size: isLandscapeLayout ? 30 : 34, weight: .bold)
+        let rightArrow = makeLabel(text: ">", size: arrowSize, weight: .semibold)
         rightArrow.name = rightName
-        rightArrow.position = CGPoint(x: safeFrame.midX + arrowOffset, y: y - 2)
+        rightArrow.position = CGPoint(x: baseX + arrowOffset, y: ty(y - 2))
         parent.addChild(rightArrow)
     }
 
@@ -884,16 +1263,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func makeLabel(text: String, size: CGFloat, weight: UIFont.Weight) -> SKLabelNode {
-        let baseFont = UIFont.systemFont(ofSize: size, weight: weight)
-        let descriptor = baseFont.fontDescriptor.withDesign(.rounded) ?? baseFont.fontDescriptor
-        let font = UIFont(descriptor: descriptor, size: size)
-        let label = SKLabelNode(fontNamed: font.fontName)
-        label.text = text
-        label.fontSize = size
-        label.fontColor = .white
-        label.horizontalAlignmentMode = .center
-        label.verticalAlignmentMode = .center
-        return label
+        GameMenuAppearance.label(text: text, size: size, weight: weight)
     }
 
     private func makeScoreboardLabel(text: String, size: CGFloat) -> SKLabelNode {
@@ -907,20 +1277,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         return label
     }
 
-    private func makeButton(title: String, name: String) -> SKShapeNode {
-        let buttonSize = CGSize(width: 160, height: 54)
-        let button = SKShapeNode(rectOf: buttonSize, cornerRadius: 16)
-        button.name = name
-        button.fillColor = .clear
-        button.strokeColor = .white
-        button.lineWidth = 1.5
-
-        let titleLabel = makeLabel(text: title, size: 26, weight: .semibold)
-        titleLabel.name = name
-        titleLabel.position = .zero
-        button.addChild(titleLabel)
-
-        return button
+    private func makeButton(
+        title: String,
+        name: String,
+        buttonSize: CGSize? = nil,
+        titleSize: CGFloat? = nil
+    ) -> SKShapeNode {
+        let size = buttonSize ?? GameMenuAppearance.defaultButtonSize
+        let ts = titleSize ?? GameMenuAppearance.defaultButtonTitleSize
+        return GameMenuAppearance.outlinePillButton(title: title, name: name, buttonSize: size, titleSize: ts)
     }
 
     private func buttonNode(from node: SKNode, named name: String) -> SKNode? {
@@ -1359,7 +1724,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         finalScoreLabel.zPosition = 1
         overlay.addChild(finalScoreLabel)
 
-        let playAgainButton = makeButton(title: "PLAY AGAIN", name: NodeName.playAgainButton)
+        let playAgainButton = makeButton(
+            title: "PLAY AGAIN",
+            name: NodeName.playAgainButton,
+            buttonSize: CGSize(width: 204, height: 52),
+            titleSize: 20
+        )
         if isLandscapeLayout {
             playAgainButton.setScale(0.82)
             playAgainButton.position = CGPoint(x: -92, y: -58)
@@ -1469,8 +1839,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func checkMatchOver() {
         if playerScore >= selectedScoreLimit {
+            LocalLeaderboardStore.recordMatchEnd(
+                playerWon: true,
+                difficultyRaw: selectedDifficulty.rawValue,
+                gameModeRaw: selectedGameMode.rawValue
+            )
             showMatchOver(winner: .player)
         } else if enemyScore >= selectedScoreLimit {
+            LocalLeaderboardStore.recordMatchEnd(
+                playerWon: false,
+                difficultyRaw: selectedDifficulty.rawValue,
+                gameModeRaw: selectedGameMode.rawValue
+            )
             showMatchOver(winner: .enemy)
         }
     }
@@ -2010,12 +2390,77 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         )
     }
 
+    private func handleSettingsTap(at scenePoint: CGPoint) {
+        let touchedNode = atPoint(scenePoint)
+        if let button = buttonNode(from: touchedNode, named: NodeName.backButton) {
+            animateButtonPress(button) { [weak self] in
+                self?.fadeOutActiveOverlay {
+                    self?.showStartScreen()
+                }
+            }
+        } else if let button = buttonNode(from: touchedNode, named: NodeName.notificationsLeft) {
+            animateButtonPress(button) { [weak self] in
+                self?.setNotificationsEnabledFromPicker(false)
+            }
+        } else if let button = buttonNode(from: touchedNode, named: NodeName.notificationsRight) {
+            animateButtonPress(button) { [weak self] in
+                self?.setNotificationsEnabledFromPicker(true)
+            }
+        } else if let button = buttonNode(from: touchedNode, named: NodeName.difficultyLeft) {
+            animateButtonPress(button) { [weak self] in
+                self?.changeDifficulty(by: -1)
+            }
+        } else if let button = buttonNode(from: touchedNode, named: NodeName.difficultyRight) {
+            animateButtonPress(button) { [weak self] in
+                self?.changeDifficulty(by: 1)
+            }
+        } else if let button = buttonNode(from: touchedNode, named: NodeName.gameModeLeft) {
+            animateButtonPress(button) { [weak self] in
+                self?.changeGameMode(by: -1)
+            }
+        } else if let button = buttonNode(from: touchedNode, named: NodeName.gameModeRight) {
+            animateButtonPress(button) { [weak self] in
+                self?.changeGameMode(by: 1)
+            }
+        } else if let button = buttonNode(from: touchedNode, named: NodeName.leaderboardButton) {
+            animateButtonPress(button) { [weak self] in
+                self?.fadeOutActiveOverlay {
+                    self?.showLeaderboardScreen()
+                }
+            }
+        } else if let button = buttonNode(from: touchedNode, named: NodeName.profileCardRoot) {
+            animateButtonPress(button) { [weak self] in
+                self?.openProfileEditor()
+            }
+        } else if let button = buttonNode(from: touchedNode, named: NodeName.privacyButton) {
+            animateButtonPress(button) { [weak self] in
+                self?.openPolicyPage(title: "Privacy Policy", url: AppConstants.Legal.privacyPolicyURL)
+            }
+        } else if let button = buttonNode(from: touchedNode, named: NodeName.termsButton) {
+            animateButtonPress(button) { [weak self] in
+                self?.openPolicyPage(title: "Terms of Use", url: AppConstants.Legal.termsOfUseURL)
+            }
+        }
+    }
+
+    private func handleLeaderboardTap(at scenePoint: CGPoint) {
+        let touchedNode = atPoint(scenePoint)
+        if let button = buttonNode(from: touchedNode, named: NodeName.backButton) {
+            animateButtonPress(button) { [weak self] in
+                self?.fadeOutActiveOverlay {
+                    self?.showSettingsScreen()
+                }
+            }
+        }
+    }
+
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first else { return }
 
-        let touchedNode = atPoint(touch.location(in: self))
+        let location = touch.location(in: self)
 
         if gameState == .start {
+            let touchedNode = atPoint(location)
             if let button = buttonNode(from: touchedNode, named: NodeName.playButton) {
                 animateButtonPress(button) { [weak self] in
                     self?.fadeOutActiveOverlay {
@@ -2030,44 +2475,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 }
             }
         } else if gameState == .settings {
-            if let button = buttonNode(from: touchedNode, named: NodeName.backButton) {
-                animateButtonPress(button) { [weak self] in
-                    self?.fadeOutActiveOverlay {
-                        self?.showStartScreen()
-                    }
-                }
-            } else if let button = buttonNode(from: touchedNode, named: NodeName.difficultyLeft) {
-                animateButtonPress(button) { [weak self] in
-                    self?.changeDifficulty(by: -1)
-                }
-            } else if let button = buttonNode(from: touchedNode, named: NodeName.difficultyRight) {
-                animateButtonPress(button) { [weak self] in
-                    self?.changeDifficulty(by: 1)
-                }
-            } else if let button = buttonNode(from: touchedNode, named: NodeName.gameModeLeft) {
-                animateButtonPress(button) { [weak self] in
-                    self?.changeGameMode(by: -1)
-                }
-            } else if let button = buttonNode(from: touchedNode, named: NodeName.gameModeRight) {
-                animateButtonPress(button) { [weak self] in
-                    self?.changeGameMode(by: 1)
-                }
-            } else if let button = buttonNode(from: touchedNode, named: NodeName.privacyButton) {
-                animateButtonPress(button) { [weak self] in
-                    self?.openPolicyPage(title: "Privacy Policy", url: AppConstants.Legal.privacyPolicyURL)
-                }
-            } else if let button = buttonNode(from: touchedNode, named: NodeName.termsButton) {
-                animateButtonPress(button) { [weak self] in
-                    self?.openPolicyPage(title: "Terms of Use", url: AppConstants.Legal.termsOfUseURL)
-                }
-            }
+            settingsPanBegan = location
+            settingsLastTouchY = location.y
+            settingsDragActive = false
+        } else if gameState == .leaderboard {
+            leaderboardPanBegan = location
+            leaderboardLastTouchY = location.y
+            leaderboardDragActive = false
         } else if gameState == .playing {
+            let touchedNode = atPoint(location)
             if !isCountingDown, let button = buttonNode(from: touchedNode, named: NodeName.pauseButton) {
                 animateButtonPress(button) { [weak self] in
                     self?.showPauseMenu()
                 }
             }
         } else if gameState == .paused {
+            let touchedNode = atPoint(location)
             if let button = buttonNode(from: touchedNode, named: NodeName.resumeButton) {
                 animateButtonPress(button) { [weak self] in
                     self?.fadeOutActiveOverlay {
@@ -2083,6 +2506,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 }
             }
         } else if gameState == .gameOver {
+            let touchedNode = atPoint(location)
             if let button = buttonNode(from: touchedNode, named: NodeName.menuButton) {
                 animateButtonPress(button) { [weak self] in
                     self?.fadeOutActiveOverlay {
@@ -2095,6 +2519,88 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                         self?.startGame()
                     }
                 }
+            }
+        }
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        let loc = touch.location(in: self)
+
+        if gameState == .settings, let began = settingsPanBegan {
+            if settingsDragActive || abs(loc.y - began.y) > 8 {
+                if !settingsDragActive {
+                    settingsDragActive = true
+                    settingsLastTouchY = loc.y
+                } else {
+                    applySettingsScroll(deltaY: loc.y - settingsLastTouchY)
+                    settingsLastTouchY = loc.y
+                }
+            }
+        } else if gameState == .leaderboard, let began = leaderboardPanBegan {
+            if leaderboardDragActive || abs(loc.y - began.y) > 8 {
+                if !leaderboardDragActive {
+                    leaderboardDragActive = true
+                    leaderboardLastTouchY = loc.y
+                } else {
+                    applyLeaderboardScroll(deltaY: loc.y - leaderboardLastTouchY)
+                    leaderboardLastTouchY = loc.y
+                }
+            }
+        } else if gameState == .playing {
+            updatePaddleTarget(toX: loc.x, timestamp: touch.timestamp)
+        }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        let end = touch.location(in: self)
+
+        if gameState == .settings {
+            let began = settingsPanBegan ?? end
+            settingsPanBegan = nil
+            if settingsDragActive {
+                settingsDragActive = false
+                return
+            }
+            let d = hypot(end.x - began.x, end.y - began.y)
+            if d < 14 {
+                handleSettingsTap(at: began)
+            }
+            return
+        }
+
+        if gameState == .leaderboard {
+            let began = leaderboardPanBegan ?? end
+            leaderboardPanBegan = nil
+            if leaderboardDragActive {
+                leaderboardDragActive = false
+                return
+            }
+            let d = hypot(end.x - began.x, end.y - began.y)
+            if d < 14 {
+                handleLeaderboardTap(at: began)
+            }
+            return
+        }
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        settingsPanBegan = nil
+        settingsDragActive = false
+        leaderboardPanBegan = nil
+        leaderboardDragActive = false
+    }
+
+    private func setNotificationsEnabledFromPicker(_ enabled: Bool) {
+        if enabled == notificationsEnabled { return }
+        notificationsEnabled = enabled
+        notificationsValueLabel?.text = GameNotificationPreferenceStore.notificationsPickerTitle(isEnabled: enabled)
+        GameNotificationPreferenceStore.isUserRemoteNotificationsEnabled = enabled
+        if enabled {
+            GameNotificationPreferenceStore.applyEnableFromSettings { [weak self] in
+                self?.notificationsEnabled = false
+                self?.notificationsValueLabel?.text = GameNotificationPreferenceStore.notificationsPickerTitle(isEnabled: false)
             }
         }
     }
@@ -2128,10 +2634,100 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         viewController.present(navigationController, animated: true)
     }
 
-    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard gameState == .playing else { return }
-        guard let touch = touches.first else { return }
-        updatePaddleTarget(toX: touch.location(in: self).x, timestamp: touch.timestamp)
+    private func refreshProfileSettingsUI() {
+        profileCardHandles?.refreshFromStore()
+    }
+
+    private func presentPhotoSourceSheet(from presenter: UIViewController) {
+        let sheet = UIAlertController(title: "Profile photo", message: nil, preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: "Photo library", style: .default) { [weak self] _ in
+            presenter.dismiss(animated: true) {
+                guard let self, let root = self.view?.window?.rootViewController else { return }
+                let host = Self.topPresentedViewController(startingFrom: root)
+                self.startProfilePhotoFlow(host: host, start: { $0.presentPhotoLibrary() })
+            }
+        })
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+            sheet.addAction(UIAlertAction(title: "Take photo", style: .default) { [weak self] _ in
+                presenter.dismiss(animated: true) {
+                    guard let self, let root = self.view?.window?.rootViewController else { return }
+                    let host = Self.topPresentedViewController(startingFrom: root)
+                    self.startProfilePhotoFlow(host: host, start: { $0.presentCamera() })
+                }
+            })
+        }
+        sheet.addAction(UIAlertAction(title: "Choose file…", style: .default) { [weak self] _ in
+            presenter.dismiss(animated: true) {
+                guard let self, let root = self.view?.window?.rootViewController else { return }
+                let host = Self.topPresentedViewController(startingFrom: root)
+                self.startProfilePhotoFlow(host: host, start: { $0.presentDocumentPicker() })
+            }
+        })
+        if PlayerProfileStore.hasAvatarImage {
+            sheet.addAction(UIAlertAction(title: "Remove photo", style: .destructive) { [weak self] _ in
+                PlayerProfileStore.removeAvatarImage()
+                self?.refreshProfileSettingsUI()
+            })
+        }
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        if let pop = sheet.popoverPresentationController, let v = presenter.view {
+            pop.sourceView = v
+            pop.sourceRect = CGRect(x: v.bounds.midX, y: v.bounds.midY, width: 1, height: 1)
+            pop.permittedArrowDirections = []
+        }
+        presenter.present(sheet, animated: true)
+    }
+
+    private func startProfilePhotoFlow(host: UIViewController, start: (PlayerProfilePhotoPickerCoordinator) -> Void) {
+        let coordinator = PlayerProfilePhotoPickerCoordinator(host: host) { [weak self] in
+            self?.profilePhotoCoordinator = nil
+            self?.refreshProfileSettingsUI()
+        }
+        profilePhotoCoordinator = coordinator
+        start(coordinator)
+    }
+
+    private func openProfileEditor() {
+        guard let root = view?.window?.rootViewController else { return }
+        let presenter = Self.topPresentedViewController(startingFrom: root)
+
+        let alert = UIAlertController(
+            title: "Profile",
+            message: "Saved on this device only.",
+            preferredStyle: .alert
+        )
+        alert.addTextField { textField in
+            textField.placeholder = "Nickname"
+            textField.text = PlayerProfileStore.displayName
+            textField.autocorrectionType = .yes
+            textField.textContentType = .nickname
+            textField.clearButtonMode = .whileEditing
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Photo…", style: .default) { [weak self] _ in
+            presenter.dismiss(animated: true) {
+                guard let self, let r = self.view?.window?.rootViewController else { return }
+                self.presentPhotoSourceSheet(from: Self.topPresentedViewController(startingFrom: r))
+            }
+        })
+        if PlayerProfileStore.hasProfile || PlayerProfileStore.hasAvatarImage {
+            alert.addAction(UIAlertAction(title: "Clear profile", style: .destructive) { [weak self] _ in
+                PlayerProfileStore.clear()
+                self?.refreshProfileSettingsUI()
+            })
+        }
+        alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak self] _ in
+            PlayerProfileStore.setDisplayName(alert.textFields?.first?.text)
+            self?.refreshProfileSettingsUI()
+        })
+        presenter.present(alert, animated: true)
+    }
+
+    private static func topPresentedViewController(startingFrom root: UIViewController) -> UIViewController {
+        if let presented = root.presentedViewController {
+            return topPresentedViewController(startingFrom: presented)
+        }
+        return root
     }
 
     private func updatePaddleTarget(toX xPosition: CGFloat, timestamp: TimeInterval) {

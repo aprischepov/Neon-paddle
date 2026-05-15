@@ -25,8 +25,9 @@ final class AppsFlyerUDLBridge: NSObject, DeepLinkDelegate {
         let fromClickEvent = Self.normalizedClickEvent(deepLink)
         var merged = fromClickEvent
         Self.supplement(from: deepLink, into: &merged)
+        merged = AppsFlyerConversionPayload.sanitizedAttributionPayload(merged)
 
-        guard !merged.isEmpty else { return }
+        guard AppsFlyerConversionPayload.isSubstantiveAttributionPayload(merged) else { return }
 
         AppsFlyerUDLPayloadStore.save(merged)
         NotificationCenter.default.post(name: .appsFlyerUDLPayloadDidUpdate, object: nil)
@@ -71,5 +72,28 @@ final class AppsFlyerUDLBridge: NSObject, DeepLinkDelegate {
         if merged["is_deferred"] == nil {
             merged["is_deferred"] = deepLink.isDeferred
         }
+
+        let clickEvent = deepLink.clickEvent
+        for key in Self.oneLinkSupplementKeys {
+            put(key, clickEvent[key])
+        }
     }
+
+    /// Поля OneLink / UDL, которые часто приходят только в `clickEvent`.
+    private static let oneLinkSupplementKeys = [
+        "is_retargeting",
+        "agency",
+        "adset",
+        "af_adset",
+        "af_channel",
+        "af_keywords",
+        "af_ad",
+        "af_ad_id",
+        "af_adset_id",
+        "af_c_id",
+        "af_siteid",
+        "af_prt",
+        "pid",
+        "c",
+    ]
 }

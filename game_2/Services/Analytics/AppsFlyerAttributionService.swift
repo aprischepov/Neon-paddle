@@ -60,13 +60,28 @@ final class AppsFlyerAttributionService: NSObject {
 
     private func applyConversionSuccess(_ raw: [AnyHashable: Any]) {
         let normalized = AppsFlyerConversionPayload.normalized(from: raw)
-        latestConversionPayload = normalized
-        AppsFlyerConversionStore.save(normalized)
+        let incoming = AppsFlyerConversionPayload.sanitizedAttributionPayload(normalized)
+        guard AppsFlyerConversionPayload.isSubstantiveAttributionPayload(incoming) else {
+            #if DEBUG
+            print("[AppsFlyer] Ignoring non-attribution conversion callback:", normalized.keys.sorted())
+            #endif
+            return
+        }
+
+        let merged: [String: Any]
+        if let existing = latestConversionPayload ?? AppsFlyerConversionStore.load() {
+            merged = AppsFlyerConversionPayload.mergingAttribution(existing: existing, incoming: incoming)
+        } else {
+            merged = incoming
+        }
+
+        latestConversionPayload = merged
+        AppsFlyerConversionStore.save(merged)
         scheduleDeferredInstallConversionRefreshIfNeeded(raw: raw)
         NotificationCenter.default.post(
             name: .appsFlyerConversionDataDidUpdate,
             object: self,
-            userInfo: [Self.conversionPayloadUserInfoKey: normalized]
+            userInfo: [Self.conversionPayloadUserInfoKey: merged]
         )
     }
 
@@ -90,7 +105,12 @@ final class AppsFlyerAttributionService: NSObject {
         deferredInstallConversionRefreshWorkItem = nil
         AppsFlyerInstallAttribution.isDeferredInstallConversionRefreshCompleted = true
 
-        guard isConfigured else { return }
+        guard isConfigured else {
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .appsFlyerDeferredInstallConversionRefreshDidFinish, object: self)
+            }
+            return
+        }
 
         AppsFlyerLib.shared().start { [weak self] dictionary, _ in
             guard let self else { return }
@@ -101,6 +121,7 @@ final class AppsFlyerAttributionService: NSObject {
                     })
                     self.applyConversionSuccess(bridged)
                 }
+                NotificationCenter.default.post(name: .appsFlyerDeferredInstallConversionRefreshDidFinish, object: self)
             }
         }
     }

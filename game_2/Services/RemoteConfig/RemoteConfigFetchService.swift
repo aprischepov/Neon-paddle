@@ -44,7 +44,18 @@ final class RemoteConfigFetchService {
 
     /// Отправить конфиг с указанным (или актуальным) conversion payload.
     func performFetch(conversionPayload: [String: Any]?) {
+        if AppStartupSettings.resolvedMode == .wrapper { return }
+        if AppStartupSettings.resolvedMode == nil, !FirstLaunchConfigGate.shared.isReadyForConfigRequest {
+            FirstLaunchConfigGate.shared.requestConfigRefreshWhenReady()
+            return
+        }
         let payload = conversionPayload ?? AppsFlyerAttributionService.shared.currentConversionPayload()
+        guard payload != nil || AppStartupSettings.resolvedMode != nil else {
+            #if DEBUG
+            print("[RemoteConfig] Skip fetch: no conversion payload on first launch")
+            #endif
+            return
+        }
         lock.lock()
         if isFetching {
             pendingRetryAfterCurrentFetch = true
@@ -61,6 +72,7 @@ final class RemoteConfigFetchService {
 
         var request = URLRequest(url: AppConstants.RemoteConfig.endpointURL)
         request.httpMethod = "POST"
+        request.timeoutInterval = 7
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.httpBody = body
@@ -134,6 +146,10 @@ final class RemoteConfigFetchService {
 
     /// После FCM / UDL и т.п. — повторить запрос с актуальным conversion + UDL + клиентскими полями.
     func requestConfigRefresh() {
+        if AppStartupSettings.resolvedMode == nil, !FirstLaunchConfigGate.shared.isReadyForConfigRequest {
+            FirstLaunchConfigGate.shared.requestConfigRefreshWhenReady()
+            return
+        }
         performFetch(conversionPayload: AppsFlyerAttributionService.shared.latestConversionPayload)
     }
 

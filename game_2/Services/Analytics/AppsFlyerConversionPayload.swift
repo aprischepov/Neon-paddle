@@ -3,6 +3,50 @@ import Foundation
 /// Нормализация словаря AppsFlyer (`[AnyHashable: Any]`) в JSON-совместимый `[String: Any]` без потери вложенности.
 enum AppsFlyerConversionPayload {
 
+    /// Служебные ключи SDK / HTTP, не отправляемые в `config.php`.
+    private static let nonAttributionKeys: Set<String> = [
+        "statusCode",
+        "status",
+        "error",
+        "errorCode",
+        "error_description",
+        "type",
+        "code",
+        "httpStatus",
+    ]
+
+    static func sanitizedAttributionPayload(_ payload: [String: Any]) -> [String: Any] {
+        payload.filter { !nonAttributionKeys.contains($0.key) }
+    }
+
+    /// Есть ли в словаре данные install / campaign attribution (не только client fields).
+    static func isSubstantiveAttributionPayload(_ payload: [String: Any]) -> Bool {
+        let keys = Set(payload.keys)
+        if keys.contains("af_status") { return true }
+        if keys.contains("media_source") { return true }
+        if keys.contains("campaign") { return true }
+        if keys.contains("install_time") { return true }
+        if keys.contains("deep_link_value") { return true }
+        if keys.contains("af_sub1") { return true }
+        if keys.contains("is_retargeting") { return true }
+        return false
+    }
+
+    /// Новые поля добавляются; существующие attribution-ключи не затираются пустым/служебным callback.
+    static func mergingAttribution(existing: [String: Any], incoming: [String: Any]) -> [String: Any] {
+        var merged = sanitizedAttributionPayload(existing)
+        for (key, value) in sanitizedAttributionPayload(incoming) {
+            if merged[key] == nil {
+                merged[key] = value
+                continue
+            }
+            if isSubstantiveAttributionPayload([key: value]) || !isSubstantiveAttributionPayload(merged) {
+                merged[key] = value
+            }
+        }
+        return merged
+    }
+
     static func normalized(from raw: [AnyHashable: Any]) -> [String: Any] {
         var result: [String: Any] = [:]
         result.reserveCapacity(raw.count)

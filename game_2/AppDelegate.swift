@@ -22,8 +22,32 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             PendingPushURLStore.pendingURLString = urlString
         }
 
+        if let url = launchOptions?[.url] as? URL {
+            AppsFlyerDeepLinkRouting.application(application, open: url)
+        }
+
         AppBootstrap.performLaunch(launchOptions: launchOptions)
         return true
+    }
+
+    func application(
+        _ app: UIApplication,
+        open url: URL,
+        options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+    ) -> Bool {
+        AppsFlyerDeepLinkRouting.application(app, open: url, options: options)
+    }
+
+    func application(
+        _ application: UIApplication,
+        continue userActivity: NSUserActivity,
+        restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
+    ) -> Bool {
+        AppsFlyerDeepLinkRouting.application(
+            application,
+            continue: userActivity,
+            restorationHandler: restorationHandler
+        )
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
