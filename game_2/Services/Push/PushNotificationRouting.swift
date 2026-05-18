@@ -5,7 +5,7 @@ enum PushNotificationRouting {
 
     static func openURLFromPushPayload(_ raw: String) {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let url = URL(string: trimmed) else { return }
+        guard let url = validatedWebURL(from: trimmed) else { return }
 
         DispatchQueue.main.async {
             switch AppStartupSettings.resolvedMode {
@@ -16,10 +16,35 @@ enum PushNotificationRouting {
                     PendingPushURLStore.pendingURLString = trimmed
                 }
             case .wrapper:
-                presentPushWebView(url: url)
+                if canPresentPushWebView() {
+                    presentPushWebView(url: url)
+                } else {
+                    PendingPushURLStore.pendingURLString = trimmed
+                }
             case nil:
                 PendingPushURLStore.pendingURLString = trimmed
             }
+        }
+    }
+
+    static func flushPendingIfPossible() {
+        guard let raw = PendingPushURLStore.pendingURLString,
+              let url = validatedWebURL(from: raw) else {
+            PendingPushURLStore.pendingURLString = nil
+            return
+        }
+
+        switch AppStartupSettings.resolvedMode {
+        case .webView:
+            guard let web = resolveConfigWebViewController() else { return }
+            PendingPushURLStore.consumePending()
+            web.loadPushOpenedURL(url)
+        case .wrapper:
+            guard canPresentPushWebView() else { return }
+            PendingPushURLStore.consumePending()
+            presentPushWebView(url: url)
+        case nil:
+            return
         }
     }
 
@@ -43,6 +68,21 @@ enum PushNotificationRouting {
         let host = topMost(from: root)
         let pushWeb = PushPayloadWebViewController(url: url)
         host.present(pushWeb, animated: true)
+    }
+
+    private static func canPresentPushWebView() -> Bool {
+        guard let root = keyWindow()?.rootViewController else { return false }
+        guard root is GameViewController else { return false }
+        return root.presentedViewController == nil
+    }
+
+    private static func validatedWebURL(from raw: String) -> URL? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let url = URL(string: trimmed),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https" else { return nil }
+        return url
     }
 
     private static func topMost(from root: UIViewController) -> UIViewController {

@@ -87,7 +87,7 @@ struct PushNotificationPrePromptView: View {
                     Image(.skip)
                         .resizable()
                         .frame(width: 46, height: 18)
-                        .padding(.bottom, 12)
+                        .padding(.bottom, 24)
                 }
             }
         }

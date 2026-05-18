@@ -6,12 +6,13 @@ enum PushUserInfoExtractor {
     /// Приоритет: `data.url` / `message.data.url` (контракт), затем плоские ключи из FCM data, без `gcm.notification.link`.
     static func urlString(from userInfo: [AnyHashable: Any]) -> String? {
         if let s = urlFromDataField(userInfo["data"]) { return s }
-        if let message = userInfo["message"] as? [String: Any],
-           let s = urlFromDataField(message["data"]) {
-            return s
+        if let message = dictionary(from: userInfo["message"]) {
+            if let s = urlFromDataField(message["data"]) {
+                return s
+            }
         }
         for key in ["url", "link", "click_url", "open_url", "target_url"] {
-            if let s = string(from: userInfo[AnyHashable(key)]) { return s }
+            if let s = httpURLString(from: userInfo[AnyHashable(key)]) { return s }
         }
         return nil
     }
@@ -22,9 +23,9 @@ enum PushUserInfoExtractor {
     }
 
     private static func urlFromDataField(_ value: Any?) -> String? {
-        if let dict = value as? [String: Any] {
+        if let dict = dictionary(from: value) {
             for key in ["url", "link", "click_url", "open_url", "target_url"] {
-                if let s = string(from: dict[key]) { return s }
+                if let s = httpURLString(from: dict[key]) { return s }
             }
             return nil
         }
@@ -32,8 +33,23 @@ enum PushUserInfoExtractor {
            let data = str.data(using: .utf8),
            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             for key in ["url", "link", "click_url", "open_url", "target_url"] {
-                if let s = string(from: obj[key]) { return s }
+                if let s = httpURLString(from: obj[key]) { return s }
             }
+        }
+        return nil
+    }
+
+    private static func dictionary(from value: Any?) -> [String: Any]? {
+        if let dict = value as? [String: Any] {
+            return dict
+        }
+        if let dict = value as? [AnyHashable: Any] {
+            var result: [String: Any] = [:]
+            for (key, value) in dict {
+                guard let key = key as? String else { continue }
+                result[key] = value
+            }
+            return result
         }
         return nil
     }
@@ -50,7 +66,9 @@ enum PushUserInfoExtractor {
 
     private static func httpURLString(from value: Any?) -> String? {
         guard let s = string(from: value) else { return nil }
-        guard s.lowercased().hasPrefix("http") else { return nil }
+        guard let url = URL(string: s),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https" else { return nil }
         return s
     }
 }

@@ -139,14 +139,17 @@ final class ConfigWebViewController: UIViewController {
     /// После неуспешного refresh конфига — последний сохранённый URL (п. 2.1 fallback).
     private func finishDeferredLoadUsingSavedURL() {
         guard deferContentLoadUntilConfigRefresh, !didPerformContentLoad else { return }
+        guard !isDisplayingOneTimePushURL else { return }
         let fallback = RemoteConfigStore.savedURLString ?? loadedURLString
         loadURLString(fallback)
     }
 
     /// Одноразовая загрузка ссылки из push (`data.url`). Не записывает URL в `RemoteConfigStore`.
     func loadPushOpenedURL(_ url: URL) {
+        loadViewIfNeeded()
         loadedURLString = url.absoluteString
         isDisplayingOneTimePushURL = true
+        didPerformContentLoad = true
         webView.load(URLRequest(url: url))
     }
 

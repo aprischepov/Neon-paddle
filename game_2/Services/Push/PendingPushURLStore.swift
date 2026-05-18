@@ -13,6 +13,11 @@ enum PendingPushURLStore {
         }
     }
 
+    static var hasPendingURL: Bool {
+        guard let value = inMemoryPending else { return false }
+        return !value.isEmpty
+    }
+
     @discardableResult
     static func consumePending() -> String? {
         let v = inMemoryPending

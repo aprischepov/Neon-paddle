@@ -5,15 +5,14 @@ enum AppForegroundCoordinator {
     static func applicationDidBecomeActive() {
         AnalyticsServices.applicationDidBecomeActive()
         WebViewOfflineRootCoordinator.syncWithConnectivityIfNeeded()
+        flushPendingPushIfPossible()
         refreshRemoteConfigIfWebViewModeAndNeeded()
-        flushPendingPushForWrapperMode()
     }
 
-    /// Ссылка из cold start по push в режиме обёртки (WebView забирает pending в `ConfigWebViewController`).
-    private static func flushPendingPushForWrapperMode() {
-        guard AppStartupSettings.resolvedMode == .wrapper else { return }
-        guard let raw = PendingPushURLStore.consumePending(), !raw.isEmpty else { return }
-        PushNotificationRouting.openURLFromPushPayload(raw)
+    /// Ссылка из push должна открыться до refresh конфига и только когда root UI уже готов.
+    private static func flushPendingPushIfPossible() {
+        guard PendingPushURLStore.hasPendingURL else { return }
+        PushNotificationRouting.flushPendingIfPossible()
     }
 
     /// П. 2.1: при активном WebView-режиме и сети — обновить конфиг по `expires` (контракт конфига).

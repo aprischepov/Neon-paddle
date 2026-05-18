@@ -63,6 +63,8 @@ enum ApplicationFlowResolver {
         guard let game = makeGameViewController() else { return }
         UIView.transition(with: window, duration: 0.35, options: .transitionCrossDissolve) {
             window.rootViewController = game
+        } completion: { _ in
+            PushNotificationRouting.flushPendingIfPossible()
         }
     }
 
