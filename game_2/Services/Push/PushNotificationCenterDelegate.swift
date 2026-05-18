@@ -26,8 +26,9 @@ final class PushNotificationCenterDelegate: NSObject, UNUserNotificationCenterDe
         let userInfo = response.notification.request.content.userInfo
         Messaging.messaging().appDidReceiveMessage(userInfo)
         if let urlString = PushUserInfoExtractor.urlString(from: userInfo) {
-            PushNotificationRouting.openURLFromPushPayload(urlString)
+            PushNotificationRouting.openURLFromPushPayload(urlString, completion: completionHandler)
+        } else {
+            completionHandler()
         }
-        completionHandler()
     }
 }

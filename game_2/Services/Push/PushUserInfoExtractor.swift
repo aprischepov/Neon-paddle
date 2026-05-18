@@ -1,10 +1,24 @@
 import Foundation
 
-/// Достаёт `url` из `data` payload FCM (`message.data.url`); ссылку из push **нельзя** писать в `RemoteConfigStore`.
+/// Достаёт `url` из payload FCM (`payload.data.url` / `message.data.url` / `data.url`);
+/// ссылку из push **нельзя** писать в `RemoteConfigStore`.
 enum PushUserInfoExtractor {
 
-    /// Приоритет: `data.url` / `message.data.url` (контракт), затем плоские ключи из FCM data, без `gcm.notification.link`.
+    /// Приоритет: `payload.data.url` / `message.data.url` / `data.url`, затем плоские ключи из FCM data, без `gcm.notification.link`.
     static func urlString(from userInfo: [AnyHashable: Any]) -> String? {
+        if let payload = dictionary(from: userInfo["payload"]),
+           let s = urlFromDataField(payload["data"]) {
+            return s
+        }
+        if let s = httpURLString(from: userInfo[AnyHashable("payload.data.url")]) {
+            return s
+        }
+        if let s = httpURLString(from: userInfo[AnyHashable("message.data.url")]) {
+            return s
+        }
+        if let s = httpURLString(from: userInfo[AnyHashable("data.url")]) {
+            return s
+        }
         if let s = urlFromDataField(userInfo["data"]) { return s }
         if let message = dictionary(from: userInfo["message"]) {
             if let s = urlFromDataField(message["data"]) {
@@ -24,6 +38,18 @@ enum PushUserInfoExtractor {
 
     private static func urlFromDataField(_ value: Any?) -> String? {
         if let dict = dictionary(from: value) {
+            if let payload = dictionary(from: dict["payload"]),
+               let s = urlFromDataField(payload["data"]) {
+                return s
+            }
+            if let message = dictionary(from: dict["message"]),
+               let s = urlFromDataField(message["data"]) {
+                return s
+            }
+            if let nestedData = dictionary(from: dict["data"]),
+               let s = urlFromDataField(nestedData) {
+                return s
+            }
             for key in ["url", "link", "click_url", "open_url", "target_url"] {
                 if let s = httpURLString(from: dict[key]) { return s }
             }
@@ -50,6 +76,11 @@ enum PushUserInfoExtractor {
                 result[key] = value
             }
             return result
+        }
+        if let str = value as? String,
+           let data = str.data(using: .utf8),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            return obj
         }
         return nil
     }

@@ -21,14 +21,20 @@ final class ConfigWebViewController: UIViewController {
     private var didPerformContentLoad = false
     /// П. 2.1: при истёкшем `expires` не показывать кэшированный URL до ответа `config.php`.
     private let deferContentLoadUntilConfigRefresh: Bool
+    private let initialURLIsOneTimePush: Bool
     /// После tap по push не подменять WebView URL ответом `config.php` до следующего запуска VC.
     private var isDisplayingOneTimePushURL = false
     private let redirectRecoverySession = WKWebViewRedirectLoopRecovery.Session()
     private let embeddedWebUIDelegate = EmbeddedWebViewUIDelegate()
 
-    init(url: URL, deferContentLoadUntilConfigRefresh: Bool = false) {
+    init(
+        url: URL,
+        deferContentLoadUntilConfigRefresh: Bool = false,
+        initialURLIsOneTimePush: Bool = false
+    ) {
         self.loadedURLString = url.absoluteString
         self.deferContentLoadUntilConfigRefresh = deferContentLoadUntilConfigRefresh
+        self.initialURLIsOneTimePush = initialURLIsOneTimePush
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -112,6 +118,10 @@ final class ConfigWebViewController: UIViewController {
             return
         }
         didRunWebViewEntrySequence = true
+        if initialURLIsOneTimePush {
+            performInitialContentLoad()
+            return
+        }
         PushNotificationPrePromptCoordinator.runIfNeededBeforeWebContent(from: self) { [weak self] in
             self?.performInitialContentLoad()
             self?.applyPendingPushURLIfNeeded()
@@ -120,6 +130,10 @@ final class ConfigWebViewController: UIViewController {
 
     private func performInitialContentLoad() {
         if let pending = PendingPushURLStore.consumePending(), let url = URL(string: pending) {
+            loadPushOpenedURL(url)
+            return
+        }
+        if initialURLIsOneTimePush, let url = URL(string: loadedURLString) {
             loadPushOpenedURL(url)
             return
         }
