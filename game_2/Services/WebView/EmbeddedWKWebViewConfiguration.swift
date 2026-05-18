@@ -18,6 +18,8 @@ enum EmbeddedWKWebViewConfiguration {
         configuration.allowsInlineMediaPlayback = true
         configuration.mediaTypesRequiringUserActionForPlayback = []
 
+        EmbeddedWebViewScrollPolicy.installViewportZoomLock(on: configuration)
+
         return configuration
     }
 }

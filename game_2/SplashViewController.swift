@@ -17,6 +17,9 @@ final class SplashViewController: UIViewController {
     }
 
     private let imageView = UIImageView()
+    private let loadingStack = UIStackView()
+    private let spinnerImageView = UIImageView()
+    private let loadingImageView = UIImageView()
     private var didFinishSplash = false
     private var firstLaunchPipelineStarted = false
     private var awaitingFirstLaunchRouting = false
@@ -29,6 +32,11 @@ final class SplashViewController: UIViewController {
 
     /// Максимальное время первого запуска на сплеше (AF + config + переход), п. 1.3 ТЗ.
     private let firstLaunchMaximumSplashDuration: TimeInterval = 10
+    private let loadingStackSpacing: CGFloat = 20
+    private let spinnerImageSize: CGFloat = 56
+    private let loadingImageMaxWidthRatio: CGFloat = 0.5
+    private let spinnerRotationDuration: TimeInterval = 1.2
+    private let spinnerRotationKey = "spinnerRotation"
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -38,6 +46,8 @@ final class SplashViewController: UIViewController {
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
         view.addSubview(imageView)
+        configureLoadingStack()
+        setSpinnerVisible(true)
 
         NSLayoutConstraint.activate([
             imageView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -47,6 +57,72 @@ final class SplashViewController: UIViewController {
         ])
 
         updateSplashImage()
+    }
+
+    private func configureLoadingStack() {
+        loadingStack.translatesAutoresizingMaskIntoConstraints = false
+        loadingStack.axis = .vertical
+        loadingStack.spacing = loadingStackSpacing
+        loadingStack.alignment = .center
+        loadingStack.isHidden = true
+        loadingStack.isAccessibilityElement = false
+
+        spinnerImageView.translatesAutoresizingMaskIntoConstraints = false
+        let spinnerImage = UIImage(named: "spinner")
+        spinnerImageView.image = spinnerImage
+        spinnerImageView.contentMode = .scaleAspectFit
+
+        loadingImageView.translatesAutoresizingMaskIntoConstraints = false
+        let loadingImage = UIImage(named: "loading")
+        loadingImageView.image = loadingImage
+        loadingImageView.contentMode = .scaleAspectFit
+
+        loadingStack.addArrangedSubview(spinnerImageView)
+        loadingStack.addArrangedSubview(loadingImageView)
+        view.addSubview(loadingStack)
+        view.bringSubviewToFront(loadingStack)
+
+        let safe = view.safeAreaLayoutGuide
+        NSLayoutConstraint.activate([
+            loadingStack.centerXAnchor.constraint(equalTo: safe.centerXAnchor),
+            loadingStack.centerYAnchor.constraint(equalTo: safe.centerYAnchor),
+
+            spinnerImageView.widthAnchor.constraint(equalToConstant: spinnerImageSize),
+            spinnerImageView.heightAnchor.constraint(equalToConstant: spinnerImageSize),
+
+            loadingImageView.widthAnchor.constraint(lessThanOrEqualTo: safe.widthAnchor, multiplier: loadingImageMaxWidthRatio),
+        ])
+
+        if let loadingImage, loadingImage.size.width > 0 {
+            loadingImageView.heightAnchor.constraint(
+                equalTo: loadingImageView.widthAnchor,
+                multiplier: loadingImage.size.height / loadingImage.size.width
+            ).isActive = true
+        }
+    }
+
+    private func setSpinnerVisible(_ visible: Bool) {
+        loadingStack.isHidden = !visible
+        if visible {
+            startSpinnerRotation()
+        } else {
+            stopSpinnerRotation()
+        }
+    }
+
+    private func startSpinnerRotation() {
+        guard spinnerImageView.layer.animation(forKey: spinnerRotationKey) == nil else { return }
+        let rotation = CABasicAnimation(keyPath: "transform.rotation.z")
+        rotation.fromValue = 0
+        rotation.toValue = CGFloat.pi * 2
+        rotation.duration = spinnerRotationDuration
+        rotation.repeatCount = .infinity
+        rotation.isRemovedOnCompletion = false
+        spinnerImageView.layer.add(rotation, forKey: spinnerRotationKey)
+    }
+
+    private func stopSpinnerRotation() {
+        spinnerImageView.layer.removeAnimation(forKey: spinnerRotationKey)
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -80,13 +156,14 @@ final class SplashViewController: UIViewController {
     private func updateSplashImage() {
         guard view.bounds.width > 0, view.bounds.height > 0 else { return }
         let isLandscape = view.bounds.width > view.bounds.height
-        imageView.image = UIImage(named: isLandscape ? "loadingHorizontal" : "loadingVertical")
+        imageView.image = UIImage(named: isLandscape ? "splashHorizontal" : "splashVertical")
     }
 
     /// Повторный запуск: сразу `transitionFromSplash` (WebView / обёртка / оффлайн).
     private func completeRecurringSplashTransition() {
         guard !didFinishSplash else { return }
         didFinishSplash = true
+        setSpinnerVisible(false)
         guard let window = view.window else { return }
         ApplicationFlowResolver.transitionFromSplash(window: window)
     }
@@ -95,6 +172,7 @@ final class SplashViewController: UIViewController {
         guard !firstLaunchPipelineStarted else { return }
         firstLaunchPipelineStarted = true
         awaitingFirstLaunchRouting = true
+        setSpinnerVisible(true)
 
         routingObserver = NotificationCenter.default.addObserver(
             forName: .appStartupRoutingReady,
@@ -214,6 +292,7 @@ final class SplashViewController: UIViewController {
         guard !didFinishSplash, awaitingFirstLaunchRouting else { return }
         didFinishSplash = true
         awaitingFirstLaunchRouting = false
+        setSpinnerVisible(false)
         maxSplashTimer?.invalidate()
         maxSplashTimer = nil
         teardownFirstLaunchObservers()
@@ -225,6 +304,7 @@ final class SplashViewController: UIViewController {
         maxSplashTimer = nil
         awaitingFirstLaunchRouting = false
         didFinishSplash = true
+        setSpinnerVisible(false)
         teardownFirstLaunchObservers()
         guard let window = view.window else { return }
         UIView.transition(with: window, duration: 0.25, options: .transitionCrossDissolve) {

@@ -10,7 +10,7 @@ enum PushNotificationRouting {
         DispatchQueue.main.async {
             switch AppStartupSettings.resolvedMode {
             case .webView:
-                if let web = keyWindow()?.rootViewController as? ConfigWebViewController {
+                if let web = resolveConfigWebViewController() {
                     web.loadPushOpenedURL(url)
                 } else {
                     PendingPushURLStore.pendingURLString = trimmed
@@ -21,6 +21,13 @@ enum PushNotificationRouting {
                 PendingPushURLStore.pendingURLString = trimmed
             }
         }
+    }
+
+    private static func resolveConfigWebViewController() -> ConfigWebViewController? {
+        guard let root = keyWindow()?.rootViewController else { return nil }
+        if let web = root as? ConfigWebViewController { return web }
+        if let web = topMost(from: root) as? ConfigWebViewController { return web }
+        return nil
     }
 
     private static func keyWindow() -> UIWindow? {

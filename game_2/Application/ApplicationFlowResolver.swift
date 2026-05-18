@@ -38,19 +38,22 @@ enum ApplicationFlowResolver {
             window.rootViewController = NoInternetViewController(reason: .recurringWebViewOffline)
             return
         }
-        installWebViewRoot(in: window)
+        installWebViewRoot(in: window, deferContentLoadUntilConfigRefresh: RemoteConfigStore.shouldRefreshFromEndpoint)
         if RemoteConfigStore.shouldRefreshFromEndpoint {
             RemoteConfigFetchService.shared.requestConfigRefresh()
         }
     }
 
-    static func installWebViewRoot(in window: UIWindow) {
+    static func installWebViewRoot(in window: UIWindow, deferContentLoadUntilConfigRefresh: Bool = false) {
         guard let urlString = RemoteConfigStore.savedURLString,
               let url = URL(string: urlString) else {
             installWrapperRoot(in: window)
             return
         }
-        let web = ConfigWebViewController(url: url)
+        let web = ConfigWebViewController(
+            url: url,
+            deferContentLoadUntilConfigRefresh: deferContentLoadUntilConfigRefresh
+        )
         UIView.transition(with: window, duration: 0.35, options: .transitionCrossDissolve) {
             window.rootViewController = web
         }
@@ -78,7 +81,7 @@ enum ApplicationFlowResolver {
                 window.rootViewController = NoInternetViewController(reason: .recurringWebViewOffline)
                 return
             }
-            installWebViewRoot(in: window)
+            installWebViewRoot(in: window, deferContentLoadUntilConfigRefresh: RemoteConfigStore.shouldRefreshFromEndpoint)
             if RemoteConfigStore.shouldRefreshFromEndpoint {
                 RemoteConfigFetchService.shared.requestConfigRefresh()
             }

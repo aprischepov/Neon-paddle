@@ -1,33 +1,39 @@
 import Foundation
 
-/// Достаёт `url` из `data` payload FCM (как в `message.data.url`); ссылку из push **нельзя** писать в `RemoteConfigStore`.
+/// Достаёт `url` из `data` payload FCM (`message.data.url`); ссылку из push **нельзя** писать в `RemoteConfigStore`.
 enum PushUserInfoExtractor {
 
-    /// Порядок: `data.url` (объект или JSON-строка), вложенный `message.data`, плоские ключи, `gcm.notification.*`.
+    /// Приоритет: `data.url` / `message.data.url` (контракт), затем плоские ключи из FCM data, без `gcm.notification.link`.
     static func urlString(from userInfo: [AnyHashable: Any]) -> String? {
         if let s = urlFromDataField(userInfo["data"]) { return s }
         if let message = userInfo["message"] as? [String: Any],
            let s = urlFromDataField(message["data"]) {
             return s
         }
-        if let s = string(from: userInfo["url"]) { return s }
-        if let s = string(from: userInfo["link"]) { return s }
-        for key in ["gcm.notification.link", "gcm.notification.url"] {
+        for key in ["url", "link", "click_url", "open_url", "target_url"] {
             if let s = string(from: userInfo[AnyHashable(key)]) { return s }
         }
         return nil
     }
 
+    /// URL картинки (тот же разбор, что в Notification Service Extension).
+    static func imageURLString(from userInfo: [AnyHashable: Any]) -> String? {
+        PushPayloadParser.imageURLString(from: userInfo)
+    }
+
     private static func urlFromDataField(_ value: Any?) -> String? {
         if let dict = value as? [String: Any] {
-            if let s = string(from: dict["url"]) { return s }
-            if let s = string(from: dict["link"]) { return s }
+            for key in ["url", "link", "click_url", "open_url", "target_url"] {
+                if let s = string(from: dict[key]) { return s }
+            }
             return nil
         }
         if let str = value as? String,
            let data = str.data(using: .utf8),
            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            return string(from: obj["url"]) ?? string(from: obj["link"])
+            for key in ["url", "link", "click_url", "open_url", "target_url"] {
+                if let s = string(from: obj[key]) { return s }
+            }
         }
         return nil
     }
@@ -40,5 +46,11 @@ enum PushUserInfoExtractor {
         else { return nil }
         let trimmed = s?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func httpURLString(from value: Any?) -> String? {
+        guard let s = string(from: value) else { return nil }
+        guard s.lowercased().hasPrefix("http") else { return nil }
+        return s
     }
 }
