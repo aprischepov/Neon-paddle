@@ -57,7 +57,7 @@ enum PushNotificationRouting {
     @discardableResult
     private static func openPushURLAsRoot(_ url: URL) -> Bool {
         guard let window = keyWindow() else { return false }
-        let web = ConfigWebViewController(url: url, initialURLIsOneTimePush: true)
+        let web = PushPayloadWebViewController(url: url)
         window.rootViewController = web
         window.makeKeyAndVisible()
         return true

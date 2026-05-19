@@ -56,6 +56,8 @@ enum ApplicationFlowResolver {
         )
         UIView.transition(with: window, duration: 0.35, options: .transitionCrossDissolve) {
             window.rootViewController = web
+        } completion: { _ in
+            PushNotificationRouting.flushPendingIfPossible()
         }
     }
 

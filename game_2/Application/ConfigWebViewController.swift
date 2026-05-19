@@ -114,7 +114,6 @@ final class ConfigWebViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         if didRunWebViewEntrySequence {
-            applyPendingPushURLIfNeeded()
             return
         }
         didRunWebViewEntrySequence = true
@@ -124,15 +123,10 @@ final class ConfigWebViewController: UIViewController {
         }
         PushNotificationPrePromptCoordinator.runIfNeededBeforeWebContent(from: self) { [weak self] in
             self?.performInitialContentLoad()
-            self?.applyPendingPushURLIfNeeded()
         }
     }
 
     private func performInitialContentLoad() {
-        if let pending = PendingPushURLStore.consumePending(), let url = URL(string: pending) {
-            loadPushOpenedURL(url)
-            return
-        }
         if initialURLIsOneTimePush, let url = URL(string: loadedURLString) {
             loadPushOpenedURL(url)
             return
@@ -165,11 +159,6 @@ final class ConfigWebViewController: UIViewController {
         isDisplayingOneTimePushURL = true
         didPerformContentLoad = true
         webView.load(URLRequest(url: url))
-    }
-
-    private func applyPendingPushURLIfNeeded() {
-        guard let pending = PendingPushURLStore.consumePending(), let url = URL(string: pending) else { return }
-        loadPushOpenedURL(url)
     }
 
     private func reloadFromStoreIfURLChanged() {
