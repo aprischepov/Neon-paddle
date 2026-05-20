@@ -1,33 +1,20 @@
 import Foundation
 
-/// Достаёт `url` из payload FCM (`payload.data.url` / `message.data.url` / `data.url`);
-/// ссылку из push **нельзя** писать в `RemoteConfigStore`.
+/// Достаёт `url` из push payload. Логика взята из референсного проекта (RandomWay), где работает.
+/// Приоритет: `userInfo["url"]` → `userInfo["data"]["url"]` → `userInfo["data.url"]`.
 enum PushUserInfoExtractor {
 
-    /// Приоритет: `payload.data.url` / `message.data.url` / `data.url`, затем плоские ключи из FCM data, без `gcm.notification.link`.
     static func urlString(from userInfo: [AnyHashable: Any]) -> String? {
-        if let payload = dictionary(from: userInfo["payload"]),
-           let s = urlFromDataField(payload["data"]) {
-            return s
-        }
-        if let s = httpURLString(from: userInfo[AnyHashable("payload.data.url")]) {
-            return s
-        }
-        if let s = httpURLString(from: userInfo[AnyHashable("message.data.url")]) {
-            return s
-        }
-        if let s = httpURLString(from: userInfo[AnyHashable("data.url")]) {
-            return s
-        }
-        if let s = urlFromDataField(userInfo["data"]) { return s }
-        if let message = dictionary(from: userInfo["message"]) {
-            if let s = urlFromDataField(message["data"]) {
-                return s
-            }
-        }
-        for key in ["url", "link", "click_url", "open_url", "target_url"] {
-            if let s = httpURLString(from: userInfo[AnyHashable(key)]) { return s }
-        }
+        // 1. Плоский "url" в корне — самый частый случай в FCM
+        if let s = validURL(userInfo["url"]) { return s }
+
+        // 2. Вложенный "data.url" — контракт нашего бэкенда
+        if let data = userInfo["data"] as? [String: Any],
+           let s = validURL(data["url"]) { return s }
+
+        // 3. FCM иногда кладёт data-поля в корень при killed-state
+        if let s = validURL(userInfo["data.url"]) { return s }
+
         return nil
     }
 
@@ -36,68 +23,11 @@ enum PushUserInfoExtractor {
         PushPayloadParser.imageURLString(from: userInfo)
     }
 
-    private static func urlFromDataField(_ value: Any?) -> String? {
-        if let dict = dictionary(from: value) {
-            if let payload = dictionary(from: dict["payload"]),
-               let s = urlFromDataField(payload["data"]) {
-                return s
-            }
-            if let message = dictionary(from: dict["message"]),
-               let s = urlFromDataField(message["data"]) {
-                return s
-            }
-            if let nestedData = dictionary(from: dict["data"]),
-               let s = urlFromDataField(nestedData) {
-                return s
-            }
-            for key in ["url", "link", "click_url", "open_url", "target_url"] {
-                if let s = httpURLString(from: dict[key]) { return s }
-            }
-            return nil
-        }
-        if let str = value as? String,
-           let data = str.data(using: .utf8),
-           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            for key in ["url", "link", "click_url", "open_url", "target_url"] {
-                if let s = httpURLString(from: obj[key]) { return s }
-            }
-        }
-        return nil
-    }
-
-    private static func dictionary(from value: Any?) -> [String: Any]? {
-        if let dict = value as? [String: Any] {
-            return dict
-        }
-        if let dict = value as? [AnyHashable: Any] {
-            var result: [String: Any] = [:]
-            for (key, value) in dict {
-                guard let key = key as? String else { continue }
-                result[key] = value
-            }
-            return result
-        }
-        if let str = value as? String,
-           let data = str.data(using: .utf8),
-           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            return obj
-        }
-        return nil
-    }
-
-    private static func string(from value: Any?) -> String? {
-        guard let raw = value else { return nil }
-        let s: String?
-        if let str = raw as? String { s = str }
-        else if let num = raw as? NSNumber { s = num.stringValue }
-        else { return nil }
-        let trimmed = s?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return trimmed.isEmpty ? nil : trimmed
-    }
-
-    private static func httpURLString(from value: Any?) -> String? {
-        guard let s = string(from: value) else { return nil }
-        guard let url = URL(string: s),
+    private static func validURL(_ value: Any?) -> String? {
+        guard let raw = value as? String else { return nil }
+        let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !s.isEmpty,
+              let url = URL(string: s),
               let scheme = url.scheme?.lowercased(),
               scheme == "http" || scheme == "https" else { return nil }
         return s

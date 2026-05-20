@@ -27,6 +27,12 @@ enum PushNotificationRouting {
     }
 
     private static func routeValidatedPushURL(_ url: URL, originalString: String) {
+        // Если startup ещё не завершён — сохраняем, откроем после того как root установлен.
+        // Иначе startup перетрёт push WebView (race condition cold start).
+        guard AppStartupSettings.resolvedMode != nil else {
+            PendingPushURLStore.pendingURLString = originalString
+            return
+        }
         if openPushURLAsRoot(url) {
             PendingPushURLStore.pendingURLString = nil
         } else {

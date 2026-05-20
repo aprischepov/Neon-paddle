@@ -9,9 +9,11 @@ enum AppForegroundCoordinator {
         refreshRemoteConfigIfWebViewModeAndNeeded()
     }
 
-    /// Ссылка из push должна открыться до refresh конфига и только когда root UI уже готов.
+    /// Flush только если startup уже завершён (mode сохранён и root установлен).
+    /// При cold start от push startup ещё не завершён — flush произойдёт в completion installWebViewRoot/installWrapperRoot.
     private static func flushPendingPushIfPossible() {
         guard PendingPushURLStore.hasPendingURL else { return }
+        guard AppStartupSettings.resolvedMode != nil else { return }
         PushNotificationRouting.flushPendingIfPossible()
     }
 

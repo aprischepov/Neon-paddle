@@ -83,6 +83,7 @@ enum ApplicationFlowResolver {
         case .webView:
             if !ConnectivityMonitor.shared.isOnline {
                 window.rootViewController = NoInternetViewController(reason: .recurringWebViewOffline)
+                PushNotificationRouting.flushPendingIfPossible()
                 return
             }
             installWebViewRoot(in: window, deferContentLoadUntilConfigRefresh: RemoteConfigStore.shouldRefreshFromEndpoint)
