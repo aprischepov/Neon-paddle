@@ -34,6 +34,7 @@ final class PushPayloadWebViewController: UIViewController {
         let wv = WKWebView(frame: .zero, configuration: EmbeddedWKWebViewConfiguration.makeStandard())
         wv.customUserAgent = WebViewUserAgentBuilder.standardEmbeddedUserAgent()
         wv.translatesAutoresizingMaskIntoConstraints = false
+        wv.isOpaque = false
         wv.backgroundColor = .black
         wv.scrollView.backgroundColor = .black
         wv.uiDelegate = embeddedWebUIDelegate

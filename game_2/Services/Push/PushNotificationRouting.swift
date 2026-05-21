@@ -36,7 +36,12 @@ enum PushNotificationRouting {
         if openPushURLAsRoot(url) {
             PendingPushURLStore.pendingURLString = nil
         } else {
+            // Window ещё не готово (редкий момент между willEnterForeground и didBecomeActive).
+            // Сохраняем и немедленно ретраим на следующем цикле run loop — к тому времени
+            // окно гарантированно появится, а applicationDidBecomeActive уже мог отработать
+            // раньше didReceive, поэтому нельзя полагаться только на его flush.
             PendingPushURLStore.pendingURLString = originalString
+            DispatchQueue.main.async { flushPendingIfPossible() }
         }
     }
 

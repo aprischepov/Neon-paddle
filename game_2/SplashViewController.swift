@@ -165,6 +165,25 @@ final class SplashViewController: UIViewController {
         didFinishSplash = true
         setSpinnerVisible(false)
         guard let window = view.window else { return }
+
+        // Cold start from push tap: URL is already saved in PendingPushURLStore
+        // (via launchOptions or an earlier didReceive call).
+        // Open it immediately — skip the ConfigWebViewController roundtrip to eliminate
+        // the race window between installWebViewRoot and its completion callback.
+        if PendingPushURLStore.hasPendingURL {
+            PushNotificationRouting.flushPendingIfPossible()
+            if !PendingPushURLStore.hasPendingURL {
+                // Flush succeeded — still trigger a background config refresh if needed.
+                if AppStartupSettings.resolvedMode == .webView,
+                   RemoteConfigStore.shouldRefreshFromEndpoint {
+                    RemoteConfigFetchService.shared.requestConfigRefresh()
+                }
+                return
+            }
+            // Flush failed (no key window yet) — fall through to the regular transition;
+            // flushPendingIfPossible will be retried in installWebViewRoot's completion.
+        }
+
         ApplicationFlowResolver.transitionFromSplash(window: window)
     }
 

@@ -63,6 +63,7 @@ final class ConfigWebViewController: UIViewController {
         wv.navigationDelegate = self
         wv.allowsBackForwardNavigationGestures = true
         wv.translatesAutoresizingMaskIntoConstraints = false
+        wv.isOpaque = false
         wv.backgroundColor = .black
         wv.scrollView.backgroundColor = .black
         EmbeddedWebViewScrollPolicy.apply(to: wv)
