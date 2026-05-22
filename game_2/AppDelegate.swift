@@ -17,9 +17,21 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         UNUserNotificationCenter.current().delegate = PushNotificationCenterDelegate.shared
 
-        if let remote = launchOptions?[.remoteNotification] as? [AnyHashable: Any],
-           let urlString = PushUserInfoExtractor.urlString(from: remote) {
-            PendingPushURLStore.pendingURLString = urlString
+        if let remote = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
+            print("[PUSH][launchOptions] cold start from push, payload: \(remote)")
+            if let urlString = PushUserInfoExtractor.urlString(from: remote) {
+                print("[PUSH][launchOptions] extracted url=\(urlString)")
+                PendingPushURLStore.pendingURLString = urlString
+                // Помечаем URL как cold-start: iOS дополнительно вызовет didReceive(response:)
+                // для той же нотификации, и PushNotificationRouting пропустит дублирующий вызов.
+                if let url = URL(string: urlString) {
+                    PushNotificationRouting.markColdStartPushURL(url)
+                }
+            } else {
+                print("[PUSH][launchOptions] ⚠️ URL NOT FOUND in payload keys: \(remote.keys.map { "\($0)" })")
+            }
+        } else {
+            print("[PUSH][launchOptions] no push in launchOptions (background launch or normal launch)")
         }
 
         if let url = launchOptions?[.url] as? URL {

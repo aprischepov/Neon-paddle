@@ -11,7 +11,7 @@ final class PushPayloadWebViewController: UIViewController {
         AppOrientationPolicy.shouldAutorotate
     }
 
-    private let url: URL
+    let url: URL
     private var webView: WKWebView!
     private let redirectRecoverySession = WKWebViewRedirectLoopRecovery.Session()
     private let embeddedWebUIDelegate = EmbeddedWebViewUIDelegate()
@@ -29,12 +29,12 @@ final class PushPayloadWebViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        print("[PUSH][webvc] viewDidLoad url=\(url)")
         view.backgroundColor = .black
 
         let wv = WKWebView(frame: .zero, configuration: EmbeddedWKWebViewConfiguration.makeStandard())
         wv.customUserAgent = WebViewUserAgentBuilder.standardEmbeddedUserAgent()
         wv.translatesAutoresizingMaskIntoConstraints = false
-        wv.isOpaque = false
         wv.backgroundColor = .black
         wv.scrollView.backgroundColor = .black
         wv.uiDelegate = embeddedWebUIDelegate
@@ -53,6 +53,7 @@ final class PushPayloadWebViewController: UIViewController {
             wv.bottomAnchor.constraint(equalTo: safe.bottomAnchor),
         ])
 
+        print("[PUSH][webvc] calling webView.load url=\(url)")
         webView.load(URLRequest(url: url))
     }
 
@@ -79,20 +80,25 @@ extension PushPayloadWebViewController: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        print("[PUSH][webvc] didStartProvisionalNavigation url=\(webView.url?.absoluteString ?? "nil")")
         redirectRecoverySession.noteProvisionalNavigationStarted()
     }
 
     func webView(_ webView: WKWebView, didReceiveServerRedirectForProvisionalNavigation navigation: WKNavigation!) {
+        print("[PUSH][webvc] didReceiveServerRedirect url=\(webView.url?.absoluteString ?? "nil")")
         redirectRecoverySession.noteServerRedirect(targetURL: webView.url)
     }
 
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        print("[PUSH][webvc] didCommit url=\(webView.url?.absoluteString ?? "nil")")
     }
 
-    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        print("[PUSH][webvc] didFinish url=\(webView.url?.absoluteString ?? "nil")")
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        print("[PUSH][webvc] ⚠️ didFailProvisionalNavigation error=\(error)")
         Task { @MainActor in
             if await WKWebViewRedirectLoopRecovery.handleTooManyRedirectsRecoveryIfNeeded(
                 webView: webView,
@@ -105,6 +111,7 @@ extension PushPayloadWebViewController: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        print("[PUSH][webvc] ⚠️ didFail error=\(error)")
         Task { @MainActor in
             if await WKWebViewRedirectLoopRecovery.handleTooManyRedirectsRecoveryIfNeeded(
                 webView: webView,

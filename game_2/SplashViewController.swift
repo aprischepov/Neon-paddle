@@ -164,26 +164,40 @@ final class SplashViewController: UIViewController {
         guard !didFinishSplash else { return }
         didFinishSplash = true
         setSpinnerVisible(false)
-        guard let window = view.window else { return }
+        print("[PUSH][splash] completeRecurringSplashTransition viewWindow=\(view.window != nil) pending=\(PendingPushURLStore.hasPendingURL) mode=\(String(describing: AppStartupSettings.resolvedMode))")
+        guard let window = view.window else {
+            print("[PUSH][splash] view.window=nil — rootVC was already replaced, exiting")
+            return
+        }
+
+        if window.rootViewController is PushPayloadWebViewController {
+            print("[PUSH][splash] rootVC is already PushPayloadWebVC — skip normal transition")
+            if AppStartupSettings.resolvedMode == .webView,
+               RemoteConfigStore.shouldRefreshFromEndpoint {
+                RemoteConfigFetchService.shared.requestConfigRefresh()
+            }
+            return
+        }
 
         // Cold start from push tap: URL is already saved in PendingPushURLStore
         // (via launchOptions or an earlier didReceive call).
         // Open it immediately — skip the ConfigWebViewController roundtrip to eliminate
         // the race window between installWebViewRoot and its completion callback.
         if PendingPushURLStore.hasPendingURL {
+            print("[PUSH][splash] pending URL found — flushing")
             PushNotificationRouting.flushPendingIfPossible()
             if !PendingPushURLStore.hasPendingURL {
-                // Flush succeeded — still trigger a background config refresh if needed.
+                print("[PUSH][splash] flush succeeded from splash")
                 if AppStartupSettings.resolvedMode == .webView,
                    RemoteConfigStore.shouldRefreshFromEndpoint {
                     RemoteConfigFetchService.shared.requestConfigRefresh()
                 }
                 return
             }
-            // Flush failed (no key window yet) — fall through to the regular transition;
-            // flushPendingIfPossible will be retried in installWebViewRoot's completion.
+            print("[PUSH][splash] flush failed — falling through to transitionFromSplash")
         }
 
+        print("[PUSH][splash] calling transitionFromSplash mode=\(String(describing: AppStartupSettings.resolvedMode))")
         ApplicationFlowResolver.transitionFromSplash(window: window)
     }
 
