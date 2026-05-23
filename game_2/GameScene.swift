@@ -253,6 +253,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         static let exitButton = "exitButton"
         static let playAgainButton = "playAgainButton"
         static let leaderboardButton = "leaderboardButton"
+        static let supportButton = "supportButton"
         static let notificationsLeft = "notificationsLeft"
         static let notificationsRight = "notificationsRight"
     }
@@ -645,13 +646,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     /// Пикеры, блок профиля и кнопка лидерборда — единая вертикальная раскладка (портрет и ландшафт).
+    @discardableResult
     private func layoutSettingsScrollBody(
         in scrollRoot: SKNode,
         layoutMidY: CGFloat,
         contentTop: CGFloat,
         rowWidth: CGFloat,
         leaderHeight: CGFloat
-    ) {
+    ) -> CGFloat {
         let pickerRowSpacing: CGFloat = isLandscapeLayout ? 50 : 62
         let leaderHalf = leaderHeight * 0.5
         let plateHalf = GameSettingsProfileCard.Metrics.plateHalfHeight(isPortrait: !isLandscapeLayout)
@@ -723,6 +725,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         leaderboardButton.alpha = 0.92
         leaderboardButton.position = CGPoint(x: 0, y: leaderboardCenterY - layoutMidY)
         scrollRoot.addChild(leaderboardButton)
+        return leaderboardCenterY - leaderHalf
     }
 
     private func showSettingsScreen() {
@@ -760,8 +763,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         if isLandscapeLayout {
             titleLabel.position = CGPoint(x: safeFrame.midX, y: safeFrame.midY + 104)
-            legalY = safeFrame.midY - 174
-            backY = safeFrame.midY - 220
+            // legalY / backY unused in landscape — buttons go into scroll
+            legalY = 0
+            backY = 0
             pairW = (laneWidth - pairGap) * 0.5
         } else {
             titleLabel.position = CGPoint(x: safeFrame.midX, y: safeFrame.maxY - 36)
@@ -772,8 +776,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         settingsOverlay.addChild(titleLabel)
 
-        let contentBottom = legalY + legalRowH * 0.5 + 12
         let contentTop = titleLabel.position.y - (isLandscapeLayout ? 18 : 22)
+        // In landscape all buttons go inside scroll — extend viewport to screen bottom.
+        let contentBottom: CGFloat = isLandscapeLayout
+            ? safeFrame.minY + 16
+            : legalY + legalRowH * 0.5 + 12
         let scrollChrome = makeVerticalScrollChrome(
             in: settingsOverlay,
             safeFrame: safeFrame,
@@ -786,23 +793,42 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         settingsScrollRoot = scrollRoot
         settingsVisibleHalfHeight = scrollChrome.halfHeight
 
-        layoutSettingsScrollBody(
+        let rowWidth: CGFloat = isLandscapeLayout ? laneWidth : cardWidth
+        let scrollBodyBottom = layoutSettingsScrollBody(
             in: scrollRoot,
             layoutMidY: layoutMidY,
             contentTop: contentTop,
-            rowWidth: isLandscapeLayout ? laneWidth : cardWidth,
+            rowWidth: rowWidth,
             leaderHeight: leaderHeight
         )
 
+        // Support button — always inside scroll, both orientations
+        let supportH: CGFloat = isLandscapeLayout ? leaderHeight : leaderHeight
+        let supportGap: CGFloat = isLandscapeLayout ? 16 : 20
+        let supportCenterY = scrollBodyBottom - supportH * 0.5 - supportGap
+        let supportButton = makeButton(
+            title: "SUPPORT",
+            name: NodeName.supportButton,
+            buttonSize: CGSize(width: rowWidth, height: supportH),
+            titleSize: 16
+        )
+        supportButton.alpha = 0.92
+        supportButton.position = CGPoint(x: 0, y: supportCenterY - layoutMidY)
+        scrollRoot.addChild(supportButton)
+
         if isLandscapeLayout {
+            // In landscape: privacy, terms, back are all inside scroll so they're always reachable
+            let afterSupport = supportCenterY - supportH * 0.5
+            let legalGap: CGFloat = 16
+            let legalCenterY = afterSupport - legalGap - legalRowH * 0.5
             let privacyButton = makeButton(
                 title: "PRIVACY",
                 name: NodeName.privacyButton,
                 buttonSize: CGSize(width: pairW, height: legalRowH),
                 titleSize: 14
             )
-            privacyButton.position = CGPoint(x: safeFrame.midX - pairGap * 0.5 - pairW * 0.5, y: legalY)
-            settingsOverlay.addChild(privacyButton)
+            privacyButton.position = CGPoint(x: -pairGap * 0.5 - pairW * 0.5, y: legalCenterY - layoutMidY)
+            scrollRoot.addChild(privacyButton)
 
             let termsButton = makeButton(
                 title: "TERMS",
@@ -810,9 +836,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 buttonSize: CGSize(width: pairW, height: legalRowH),
                 titleSize: 14
             )
-            termsButton.position = CGPoint(x: safeFrame.midX + pairGap * 0.5 + pairW * 0.5, y: legalY)
-            settingsOverlay.addChild(termsButton)
+            termsButton.position = CGPoint(x: pairGap * 0.5 + pairW * 0.5, y: legalCenterY - layoutMidY)
+            scrollRoot.addChild(termsButton)
 
+            let backGap: CGFloat = 12
+            let backCenterY = legalCenterY - legalRowH * 0.5 - backGap - backHeight * 0.5
             let backButton = makeButton(
                 title: "BACK",
                 name: NodeName.backButton,
@@ -820,8 +848,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 titleSize: 18
             )
             backButton.alpha = 0.88
-            backButton.position = CGPoint(x: safeFrame.midX, y: backY)
-            settingsOverlay.addChild(backButton)
+            backButton.position = CGPoint(x: 0, y: backCenterY - layoutMidY)
+            scrollRoot.addChild(backButton)
         } else {
             let privacyButton = makeButton(
                 title: "PRIVACY",
@@ -2439,6 +2467,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         } else if let button = buttonNode(from: touchedNode, named: NodeName.termsButton) {
             animateButtonPress(button) { [weak self] in
                 self?.openPolicyPage(title: "Terms of Use", url: AppConstants.Legal.termsOfUseURL)
+            }
+        } else if let button = buttonNode(from: touchedNode, named: NodeName.supportButton) {
+            animateButtonPress(button) { [weak self] in
+                self?.openPolicyPage(title: "Support", url: AppConstants.Legal.supportURL)
             }
         }
     }

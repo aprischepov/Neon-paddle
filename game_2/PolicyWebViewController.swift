@@ -12,13 +12,8 @@ final class PolicyWebViewController: UIViewController, WKNavigationDelegate {
 
     private let pageURL: URL
     private let pageTitle: String
-    private lazy var webView: WKWebView = WKWebView(
-        frame: .zero,
-        configuration: EmbeddedWKWebViewConfiguration.makeStandard()
-    )
+    private lazy var webView = WKWebView(frame: .zero)
     private let activityIndicator = UIActivityIndicatorView(style: .large)
-    private let redirectRecoverySession = WKWebViewRedirectLoopRecovery.Session()
-    private let embeddedWebUIDelegate = EmbeddedWebViewUIDelegate()
 
     init(title: String, url: URL) {
         pageTitle = title
@@ -51,8 +46,6 @@ final class PolicyWebViewController: UIViewController, WKNavigationDelegate {
 
     private func configureWebView() {
         webView.navigationDelegate = self
-        webView.uiDelegate = embeddedWebUIDelegate
-        webView.customUserAgent = WebViewUserAgentBuilder.standardEmbeddedUserAgent()
         webView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(webView)
 
@@ -81,59 +74,15 @@ final class PolicyWebViewController: UIViewController, WKNavigationDelegate {
         dismiss(animated: true)
     }
 
-    func webView(
-        _ webView: WKWebView,
-        decidePolicyFor navigationAction: WKNavigationAction,
-        preferences: WKWebpagePreferences,
-        decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void
-    ) {
-        if let u = EmbeddedWebViewDeepLinkPolicy.mainFrameWebRequestURLIfLoadingInWebView(navigationAction) {
-            redirectRecoverySession.noteMainFrameProvisionalURL(u)
-        }
-        EmbeddedWebViewDeepLinkPolicy.decidePolicyForNavigationAction(navigationAction, preferences: preferences, decisionHandler: decisionHandler)
-    }
-
-    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-        redirectRecoverySession.noteProvisionalNavigationStarted()
-    }
-
-    func webView(_ webView: WKWebView, didReceiveServerRedirectForProvisionalNavigation navigation: WKNavigation!) {
-        redirectRecoverySession.noteServerRedirect(targetURL: webView.url)
-    }
-
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         activityIndicator.stopAnimating()
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        Task { @MainActor in
-            if await WKWebViewRedirectLoopRecovery.handleTooManyRedirectsRecoveryIfNeeded(
-                webView: webView,
-                error: error,
-                session: redirectRecoverySession,
-                fallbackURL: pageURL
-            ) {
-                activityIndicator.stopAnimating()
-                return
-            }
-            EmbeddedWebViewDeepLinkPolicy.recoverWithGoBackIfUnsupportedURL(webView: webView, error: error)
-            activityIndicator.stopAnimating()
-        }
+        activityIndicator.stopAnimating()
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        Task { @MainActor in
-            if await WKWebViewRedirectLoopRecovery.handleTooManyRedirectsRecoveryIfNeeded(
-                webView: webView,
-                error: error,
-                session: redirectRecoverySession,
-                fallbackURL: pageURL
-            ) {
-                activityIndicator.stopAnimating()
-                return
-            }
-            EmbeddedWebViewDeepLinkPolicy.recoverWithGoBackIfUnsupportedURL(webView: webView, error: error)
-            activityIndicator.stopAnimating()
-        }
+        activityIndicator.stopAnimating()
     }
 }
