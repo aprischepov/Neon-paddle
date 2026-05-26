@@ -22,6 +22,7 @@ enum GameNotificationPreferenceStore {
     static func applyEnableFromSettings(onBlocked: @escaping () -> Void) {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, _ in
             DispatchQueue.main.async {
+                AppLogger.track("notifications_permission_result", properties: ["granted": granted])
                 if granted {
                     UIApplication.shared.registerForRemoteNotifications()
                 } else {

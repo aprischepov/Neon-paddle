@@ -14,9 +14,7 @@ final class AppsFlyerAttributionService: NSObject {
         let devKey = ThirdPartyKeys.appsFlyerDevKey
         let appId = ThirdPartyKeys.appsFlyerAppleAppID
         guard !devKey.isEmpty, !appId.isEmpty else {
-            #if DEBUG
-            print("[AppsFlyer] Пропуск: задайте appsFlyerDevKey и appsFlyerAppleAppID в ThirdPartyKeys.")
-            #endif
+            AppLogger.debug("AppsFlyer skipped: missing keys in ThirdPartyKeys", category: "AppsFlyer")
             return
         }
 
@@ -33,6 +31,7 @@ final class AppsFlyerAttributionService: NSObject {
     func startSession() {
         guard isConfigured else { return }
         AppsFlyerLib.shared().start()
+        AppLogger.debug("AppsFlyer session started", category: "AppsFlyer")
     }
 }
 
@@ -40,8 +39,8 @@ extension AppsFlyerAttributionService: AppsFlyerLibDelegate {
     func onConversionDataSuccess(_ conversionInfo: [AnyHashable: Any]) {}
 
     func onConversionDataFail(_ error: Error) {
-        #if DEBUG
-        print("[AppsFlyer] conversion data fail:", error.localizedDescription)
-        #endif
+        AppLogger.warning("AppsFlyer conversion data failed", properties: [
+            "error": error.localizedDescription
+        ])
     }
 }

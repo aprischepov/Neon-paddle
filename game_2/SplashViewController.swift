@@ -22,6 +22,7 @@ final class SplashViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        AppLogger.screen("splash")
         view.backgroundColor = .black
 
         imageView.translatesAutoresizingMaskIntoConstraints = false
@@ -118,7 +119,11 @@ final class SplashViewController: UIViewController {
     private func transitionToGame() {
         guard let window = view.window else { return }
         let storyboard = UIStoryboard(name: "Main", bundle: nil)
-        guard let gameVC = storyboard.instantiateViewController(withIdentifier: "GameViewController") as? GameViewController else { return }
+        guard let gameVC = storyboard.instantiateViewController(withIdentifier: "GameViewController") as? GameViewController else {
+            AppLogger.warning("Failed to instantiate GameViewController from storyboard")
+            return
+        }
+        AppLogger.track(AppLogger.Event.splashTransition)
         UIView.transition(with: window, duration: 0.35, options: .transitionCrossDissolve) {
             window.rootViewController = gameVC
         }

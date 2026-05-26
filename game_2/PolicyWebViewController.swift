@@ -28,6 +28,11 @@ final class PolicyWebViewController: UIViewController, WKNavigationDelegate {
     override func viewDidLoad() {
         super.viewDidLoad()
 
+        AppLogger.track(AppLogger.Event.policyPageOpened, properties: [
+            "title": pageTitle,
+            "url": pageURL.absoluteString
+        ])
+
         title = pageTitle
         view.backgroundColor = .systemBackground
         configureNavigationBar()
@@ -71,18 +76,33 @@ final class PolicyWebViewController: UIViewController, WKNavigationDelegate {
     }
 
     @objc private func close() {
+        AppLogger.track(AppLogger.Event.policyPageClosed, properties: [
+            "title": pageTitle,
+            "url": pageURL.absoluteString
+        ])
         dismiss(animated: true)
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         activityIndicator.stopAnimating()
+        AppLogger.debug("Policy page loaded: \(pageTitle)")
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         activityIndicator.stopAnimating()
+        logPolicyLoadFailure(error)
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         activityIndicator.stopAnimating()
+        logPolicyLoadFailure(error)
+    }
+
+    private func logPolicyLoadFailure(_ error: Error) {
+        AppLogger.track(AppLogger.Event.policyPageLoadFailed, properties: [
+            "title": pageTitle,
+            "url": pageURL.absoluteString,
+            "error": error.localizedDescription
+        ])
     }
 }

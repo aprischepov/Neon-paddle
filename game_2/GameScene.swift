@@ -544,6 +544,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         clearGameReferences()
         physicsWorld.speed = 0
         gameState = .start
+        AppLogger.screen("start", properties: analyticsOrientation())
         createWorldNode()
         setupBackground()
         createBlurredBackdrop(zPosition: 60)
@@ -734,6 +735,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         clearGameReferences()
         physicsWorld.speed = 0
         gameState = .settings
+        AppLogger.screen("settings", properties: analyticsOrientation())
         createWorldNode()
         setupBackground()
         createBlurredBackdrop(zPosition: 60)
@@ -896,6 +898,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         clearGameReferences()
         physicsWorld.speed = 0
         gameState = .leaderboard
+        AppLogger.screen("leaderboard", properties: analyticsOrientation())
         createWorldNode()
         setupBackground()
         createBlurredBackdrop(zPosition: 60)
@@ -1331,10 +1334,32 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         return matchedNode
     }
 
+    private func analyticsScreenName() -> String {
+        switch gameState {
+        case .start: return "start"
+        case .settings: return "settings"
+        case .leaderboard: return "leaderboard"
+        case .playing: return "playing"
+        case .paused: return "paused"
+        case .gameOver: return "game_over"
+        }
+    }
+
+    private func analyticsOrientation() -> [String: Any] {
+        ["orientation": isLandscapeLayout ? "landscape" : "portrait"]
+    }
+
     private func animateButtonPress(_ button: SKNode?, completion: @escaping () -> Void) {
         guard let button else {
             completion()
             return
+        }
+
+        if let name = button.name {
+            AppLogger.track(AppLogger.Event.buttonTap, properties: [
+                "button": name,
+                "screen": analyticsScreenName()
+            ].merging(analyticsOrientation()) { _, new in new })
         }
 
         isPaused = false
@@ -1383,6 +1408,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         paddleVelocityX = 0
         lastBallOwner = nil
         gameState = .playing
+        AppLogger.track(AppLogger.Event.gameStarted, properties: [
+            "difficulty": selectedDifficulty.title,
+            "game_mode": selectedGameMode.title
+        ].merging(analyticsOrientation()) { _, new in new })
 
         lightImpactFeedback.prepare()
         heavyImpactFeedback.prepare()
@@ -1721,6 +1750,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard gameState == .playing else { return }
 
         gameState = .gameOver
+        AppLogger.track(AppLogger.Event.gameOver, properties: [
+            "winner": winner == .player ? "player" : "enemy",
+            "player_score": playerScore,
+            "enemy_score": enemyScore,
+            "difficulty": selectedDifficulty.title,
+            "game_mode": selectedGameMode.title
+        ].merging(analyticsOrientation()) { _, new in new })
+        AppLogger.screen("game_over", properties: analyticsOrientation())
         physicsWorld.speed = 0
         ballTrail?.particleBirthRate = 0
         ball?.physicsBody?.velocity = .zero
@@ -1787,6 +1824,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         isPaused = false
         gameState = .paused
+        AppLogger.track(AppLogger.Event.gamePaused, properties: [
+            "player_score": playerScore,
+            "enemy_score": enemyScore
+        ].merging(analyticsOrientation()) { _, new in new })
         physicsWorld.speed = 0
         pausedBallVelocity = ball?.physicsBody?.velocity
 
@@ -1834,6 +1875,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func resumeGame() {
         isPaused = false
         gameState = .playing
+        AppLogger.track(AppLogger.Event.gameResumed, properties: analyticsOrientation())
         let velocity = pausedBallVelocity ?? makeRandomStartVelocity()
         launchBall(with: velocity)
         pausedBallVelocity = nil
@@ -2629,10 +2671,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         notificationsEnabled = enabled
         notificationsValueLabel?.text = GameNotificationPreferenceStore.notificationsPickerTitle(isEnabled: enabled)
         GameNotificationPreferenceStore.isUserRemoteNotificationsEnabled = enabled
+        AppLogger.track(AppLogger.Event.notificationsToggled, properties: ["enabled": enabled])
         if enabled {
             GameNotificationPreferenceStore.applyEnableFromSettings { [weak self] in
                 self?.notificationsEnabled = false
                 self?.notificationsValueLabel?.text = GameNotificationPreferenceStore.notificationsPickerTitle(isEnabled: false)
+                AppLogger.track(AppLogger.Event.notificationsToggled, properties: ["enabled": false, "reason": "permission_denied"])
             }
         }
     }
@@ -2645,6 +2689,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         selectedDifficulty = difficulties[newIndex]
         difficultyValueLabel?.text = selectedDifficulty.title
         saveSettings()
+        AppLogger.track(AppLogger.Event.settingsChanged, properties: [
+            "setting": "difficulty",
+            "value": selectedDifficulty.title
+        ])
     }
 
     private func changeGameMode(by offset: Int) {
@@ -2655,6 +2703,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         selectedGameMode = modes[newIndex]
         gameModeValueLabel?.text = selectedGameMode.title
         saveSettings()
+        AppLogger.track(AppLogger.Event.settingsChanged, properties: [
+            "setting": "game_mode",
+            "value": selectedGameMode.title
+        ])
     }
 
     private func openPolicyPage(title: String, url: URL) {
@@ -2699,6 +2751,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             sheet.addAction(UIAlertAction(title: "Remove photo", style: .destructive) { [weak self] _ in
                 PlayerProfileStore.removeAvatarImage()
                 self?.refreshProfileSettingsUI()
+                AppLogger.track(AppLogger.Event.profilePhotoChanged, properties: ["action": "remove"])
             })
         }
         sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
@@ -2714,6 +2767,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let coordinator = PlayerProfilePhotoPickerCoordinator(host: host) { [weak self] in
             self?.profilePhotoCoordinator = nil
             self?.refreshProfileSettingsUI()
+            AppLogger.track(AppLogger.Event.profilePhotoChanged, properties: ["action": "updated"])
         }
         profilePhotoCoordinator = coordinator
         start(coordinator)
@@ -2722,6 +2776,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func openProfileEditor() {
         guard let root = view?.window?.rootViewController else { return }
         let presenter = Self.topPresentedViewController(startingFrom: root)
+        AppLogger.track(AppLogger.Event.profileEditorOpened)
 
         let alert = UIAlertController(
             title: "Profile",
@@ -2746,11 +2801,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             alert.addAction(UIAlertAction(title: "Clear profile", style: .destructive) { [weak self] _ in
                 PlayerProfileStore.clear()
                 self?.refreshProfileSettingsUI()
+                AppLogger.track(AppLogger.Event.profileUpdated, properties: ["action": "clear"])
             })
         }
         alert.addAction(UIAlertAction(title: "Save", style: .default) { [weak self] _ in
             PlayerProfileStore.setDisplayName(alert.textFields?.first?.text)
             self?.refreshProfileSettingsUI()
+            if let name = PlayerProfileStore.displayName {
+                AmplitudeAnalyticsService.shared.setUserId(name)
+            }
+            AppLogger.track(AppLogger.Event.profileUpdated, properties: ["action": "save_nickname"])
         })
         presenter.present(alert, animated: true)
     }

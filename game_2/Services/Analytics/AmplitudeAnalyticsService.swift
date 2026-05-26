@@ -12,13 +12,12 @@ final class AmplitudeAnalyticsService {
     func start() {
         let key = ThirdPartyKeys.amplitudeAPIKey
         guard !key.isEmpty else {
-            #if DEBUG
-            print("[Amplitude] Пропуск: пустой amplitudeAPIKey в ThirdPartyKeys.")
-            #endif
+            AppLogger.debug("Amplitude skipped: empty amplitudeAPIKey in ThirdPartyKeys", category: "Amplitude")
             return
         }
         let configuration = Configuration(apiKey: key)
         amplitude = Amplitude(configuration: configuration)
+        AppLogger.debug("Amplitude SDK started", category: "Amplitude")
     }
 
     func track(event name: String, properties: [String: Any]? = nil) {
