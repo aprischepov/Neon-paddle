@@ -8,6 +8,7 @@ enum AnalyticsServices {
         FirebaseCrashlyticsService.configure()
         AmplitudeAnalyticsService.shared.start()
         AppsFlyerAttributionService.shared.configure()
+        ABTestingService.shared.fetch()
         AppLogger.debug("Analytics SDKs configured")
     }
 

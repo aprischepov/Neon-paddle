@@ -1,7 +1,6 @@
 import Foundation
 import AmplitudeSwift
 
-/// Обёртка над Amplitude Swift SDK.
 final class AmplitudeAnalyticsService {
     static let shared = AmplitudeAnalyticsService()
 

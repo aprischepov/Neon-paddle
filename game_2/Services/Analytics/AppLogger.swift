@@ -1,7 +1,6 @@
 import Foundation
 import os
 
-/// Единая точка логирования: консоль (os.Logger) + Amplitude.
 enum AppLogger {
 
     // MARK: - Event names
@@ -32,7 +31,6 @@ enum AppLogger {
 
     // MARK: - Public API
 
-    /// Продуктовое событие: локальный лог + Amplitude.
     static func track(
         _ event: String,
         properties: [String: Any]? = nil,
@@ -44,14 +42,12 @@ enum AppLogger {
         AmplitudeAnalyticsService.shared.track(event: event, properties: sanitized)
     }
 
-    /// Просмотр экрана.
     static func screen(_ name: String, properties: [String: Any]? = nil) {
         var props = properties ?? [:]
         props["screen"] = name
         track(Event.screenView, properties: props)
     }
 
-    /// Только локальный лог (без Amplitude).
     static func debug(_ message: String, category: String = "App") {
         let formatted = "[\(category)] \(message)"
         #if DEBUG
@@ -60,7 +56,6 @@ enum AppLogger {
         osLog.debug("\(formatted, privacy: .public)")
     }
 
-    /// Локальный warning + Amplitude-событие `app_warning`.
     static func warning(_ message: String, properties: [String: Any]? = nil) {
         let formatted = "[Warning] \(message)"
         #if DEBUG
