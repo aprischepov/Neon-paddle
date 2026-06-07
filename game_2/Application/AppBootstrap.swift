@@ -2,6 +2,7 @@ import UIKit
 
 enum AppBootstrap {
     static func performLaunch(launchOptions: [UIApplication.LaunchOptionsKey: Any]?) {
+        ConnectivityMonitor.shared.start()
         AnalyticsServices.configureAtLaunch(launchOptions: launchOptions)
         syncAnalyticsUserId()
         AppLogger.track(AppLogger.Event.appLaunched)

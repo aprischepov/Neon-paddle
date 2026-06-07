@@ -8,7 +8,12 @@ enum AnalyticsServices {
         FirebaseCrashlyticsService.configure()
         AmplitudeAnalyticsService.shared.start()
         AppsFlyerAttributionService.shared.configure()
-        ABTestingService.shared.fetch()
+        ABTestingService.shared.fetch { _ in
+            GrayFlowBootstrap.activateIfNeeded()
+        }
+        if GrayFlowGate.hasPersistedGrayMode {
+            GrayFlowBootstrap.activateIfNeeded()
+        }
         AppLogger.debug("Analytics SDKs configured")
     }
 

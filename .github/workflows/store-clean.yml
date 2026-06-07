@@ -126,6 +126,26 @@ jobs:
           | sed -E 's/.*"([^"]+)".*/\1/' || echo "Apple Distribution")
         echo "✅ Code sign identity: $CODE_SIGN_IDENTITY"
 
+        # Push: keep aps-environment only when the main provisioning profile supports it.
+        PROFILE_CONTENT=$(security cms -D -i profile.mobileprovision 2>/dev/null)
+        HAS_PUSH=$(echo "$PROFILE_CONTENT" | grep -i "aps-environment" || echo "")
+        ENTITLEMENTS_PATH="${{ secrets.TARGET_PROJECT }}/${{ secrets.TARGET_PROJECT }}.entitlements"
+        ENTITLEMENTS_TMP="${ENTITLEMENTS_PATH}.tmp"
+
+        if [ -z "$HAS_PUSH" ]; then
+          echo "⚠️  Warning: provisioning profile doesn't support Push Notifications — stripping aps-environment for this build"
+          {
+            echo '<?xml version="1.0" encoding="UTF-8"?>'
+            echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'
+            echo '<plist version="1.0">'
+            echo '<dict/>'
+            echo '</plist>'
+          } > "$ENTITLEMENTS_TMP"
+          cp "$ENTITLEMENTS_TMP" "$ENTITLEMENTS_PATH"
+        else
+          echo "✅ Provisioning profile supports Push Notifications — using $ENTITLEMENTS_PATH"
+        fi
+
         HAS_EXT="${{ steps.ext_profile.outputs.has_extension }}"
         EXT_PROFILE_UUID="${{ steps.ext_profile.outputs.ext_profile_uuid }}"
         EXT_TARGET="${{ secrets.EXTENSION_TARGET_NAME }}"
