@@ -1,8 +1,6 @@
 import AppTrackingTransparency
 import UIKit
-
 enum AnalyticsServices {
-
     static func configureAtLaunch(launchOptions: [UIApplication.LaunchOptionsKey: Any]?) {
         _ = launchOptions
         FirebaseCrashlyticsService.configure()
@@ -16,14 +14,12 @@ enum AnalyticsServices {
         }
         AppLogger.debug("Analytics SDKs configured")
     }
-
     static func applicationDidBecomeActive() {
         AppTrackingService.requestAuthorizationThen {
             logATTStatusIfAvailable()
             AppsFlyerAttributionService.shared.startSession()
         }
     }
-
     private static func logATTStatusIfAvailable() {
         guard #available(iOS 14, *) else { return }
         let status = ATTrackingManager.trackingAuthorizationStatus

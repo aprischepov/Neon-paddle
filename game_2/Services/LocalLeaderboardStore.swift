@@ -1,12 +1,9 @@
 import Foundation
-
-/// Локальная таблица: очки за победу (+2), за поражение (+0), вин-стрик, история матчей с сложностью.
 enum LocalLeaderboardStore {
     static let pointsPerWin = 2
     static let pointsPerLoss = 0
     private static let defaultsKey = "glowBounce.localLeaderboard.v1"
     private static let maxStoredMatches = 15
-
     struct MatchEntry: Codable, Equatable {
         var recordedAt: TimeInterval
         var difficultyRaw: Int
@@ -14,14 +11,12 @@ enum LocalLeaderboardStore {
         var playerWon: Bool
         var pointsEarned: Int
     }
-
     private struct Persisted: Codable {
         var totalPoints: Int
         var currentWinStreak: Int
         var bestWinStreak: Int
         var matches: [MatchEntry]
     }
-
     private static func load() -> Persisted {
         guard let data = UserDefaults.standard.data(forKey: defaultsKey),
               let decoded = try? JSONDecoder().decode(Persisted.self, from: data) else {
@@ -29,17 +24,14 @@ enum LocalLeaderboardStore {
         }
         return decoded
     }
-
     private static func save(_ value: Persisted) {
         guard let data = try? JSONEncoder().encode(value) else { return }
         UserDefaults.standard.set(data, forKey: defaultsKey)
     }
-
     static var totalPoints: Int { load().totalPoints }
     static var currentWinStreak: Int { load().currentWinStreak }
     static var bestWinStreak: Int { load().bestWinStreak }
     static var recentMatches: [MatchEntry] { load().matches }
-
     static func recordMatchEnd(playerWon: Bool, difficultyRaw: Int, gameModeRaw: Int) {
         var s = load()
         let pts = playerWon ? pointsPerWin : pointsPerLoss
@@ -63,7 +55,6 @@ enum LocalLeaderboardStore {
         }
         save(s)
     }
-
     static func difficultyTitle(raw: Int) -> String {
         switch raw {
         case 0: return "Easy"
@@ -72,7 +63,6 @@ enum LocalLeaderboardStore {
         default: return "—"
         }
     }
-
     static func gameModeTitle(raw: Int) -> String {
         switch raw {
         case 0: return "Classic"
@@ -80,15 +70,12 @@ enum LocalLeaderboardStore {
         default: return "—"
         }
     }
-
     private static let rowDateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateStyle = .short
         f.timeStyle = .none
         return f
     }()
-
-    /// Строки таблицы «недавние матчи» (новые сверху).
     static func matchTableRows(limit: Int = 10) -> [String] {
         let m = load().matches
         return m.prefix(limit).map { e in

@@ -1,6 +1,4 @@
 import Foundation
-
-/// Ручной обход цепочки HTTP 3xx: не ограничен лимитом авто-редиректов WebKit/`URLSession` (~16).
 enum HTTPRedirectChainResolver {
     private final class NoAutoRedirectDelegate: NSObject, URLSessionTaskDelegate {
         func urlSession(
@@ -13,8 +11,6 @@ enum HTTPRedirectChainResolver {
             completionHandler(nil)
         }
     }
-
-    /// Возвращает URL последнего ответа без 3xx (или последний из цепочки при достижении `maxHops`).
     static func resolve(byFollowingRedirectsFrom start: URL, maxHops: Int = 128, userAgent: String?) async throws -> URL {
         let delegate = NoAutoRedirectDelegate()
         let configuration = URLSessionConfiguration.ephemeral
@@ -23,7 +19,6 @@ enum HTTPRedirectChainResolver {
         configuration.httpShouldSetCookies = true
         let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
         defer { session.finishTasksAndInvalidate() }
-
         var current = start
         for _ in 0..<maxHops {
             var request = URLRequest(url: current)

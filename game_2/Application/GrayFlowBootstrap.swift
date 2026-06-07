@@ -1,16 +1,12 @@
 import Foundation
-
-/// Однократный старт серых координаторов после подтверждения варианта B или сохранённого режима.
 enum GrayFlowBootstrap {
     private static var didActivate = false
-
     static func activateIfNeeded() {
         guard GrayFlowGate.isEnabled else { return }
         guard !didActivate else { return }
         didActivate = true
-
         AppLogger.debug("[GrayFlow] activating post-attribution coordinators", category: "GrayFlow")
-        WebViewOfflineRootCoordinator.start()
+        OfflineSurfaceCoordinator.start()
         AppStartupDecisionCoordinator.shared.start()
         RemoteConfigCoordinator.shared.start()
         FirebasePushTokenBridge.shared.configure()

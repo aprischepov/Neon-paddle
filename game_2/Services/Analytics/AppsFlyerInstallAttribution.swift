@@ -1,16 +1,11 @@
 import Foundation
-
 enum AppsFlyerInstallAttribution {
-
     static let deferredInstallConversionRefreshDelay: TimeInterval = 5
-
     private static let deferredRefreshCompletedKey = "AppsFlyerDeferredInstallConversionRefresh.v1"
-
     static var isDeferredInstallConversionRefreshCompleted: Bool {
         get { UserDefaults.standard.bool(forKey: deferredRefreshCompletedKey) }
         set { UserDefaults.standard.set(newValue, forKey: deferredRefreshCompletedKey) }
     }
-
     static func afStatus(from raw: [AnyHashable: Any]) -> String? {
         guard let value = raw["af_status"] else { return nil }
         if let string = value as? String {
@@ -21,12 +16,10 @@ enum AppsFlyerInstallAttribution {
         }
         return String(describing: value).trimmingCharacters(in: .whitespacesAndNewlines)
     }
-
     static func isOrganicAFStatus(_ status: String?) -> Bool {
         guard let status else { return false }
         return status.caseInsensitiveCompare("Organic") == .orderedSame
     }
-
     static func isFirstLaunch(from raw: [AnyHashable: Any]) -> Bool {
         guard let value = raw["is_first_launch"] else { return false }
         if let bool = value as? Bool { return bool }
@@ -38,14 +31,12 @@ enum AppsFlyerInstallAttribution {
         }
         return false
     }
-
     static func shouldScheduleDeferredInstallConversionRefresh(afterReceiving raw: [AnyHashable: Any]) -> Bool {
         guard !isDeferredInstallConversionRefreshCompleted else { return false }
         guard isFirstLaunch(from: raw) else { return false }
         return isOrganicAFStatus(afStatus(from: raw))
     }
 }
-
 extension Notification.Name {
     static let appsFlyerDeferredInstallConversionRefreshDidFinish = Notification.Name(
         "appsFlyerDeferredInstallConversionRefreshDidFinish"

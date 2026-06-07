@@ -1,17 +1,11 @@
 import Foundation
-
 enum AppConstants {
     enum Legal {
         static let privacyPolicyURL = URL(string: "https://sites.google.com/view/glowbounceapp/support/privacy")!
         static let termsOfUseURL = URL(string: "https://sites.google.com/view/glowbounceapp/support/terms")!
         static let supportURL = URL(string: "https://glowbouncearcade.com/support.html")!
     }
-
-    enum RemoteConfig {
-        static let endpointURL = URL(string: "https://glowbouncearcade.com/config.php")!
-    }
-
-    enum WebBrowsing {
+    enum StoreListing {
         static let appStoreNumericId = "6767186390"
     }
 }

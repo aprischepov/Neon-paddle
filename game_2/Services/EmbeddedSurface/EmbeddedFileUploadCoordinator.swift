@@ -2,9 +2,8 @@ import PhotosUI
 import UIKit
 import UniformTypeIdentifiers
 import WebKit
-
 extension UIView {
-    func embeddedWebViewHostViewController() -> UIViewController? {
+    func embeddedSurfaceHostViewController() -> UIViewController? {
         var responder: UIResponder? = self
         while let current = responder {
             if let viewController = current as? UIViewController {
@@ -15,8 +14,7 @@ extension UIView {
         return nil
     }
 }
-
-private enum EmbeddedWebViewFileUploadCopy {
+private enum EmbeddedFileUploadCopy {
     nonisolated static func copyToTemporaryFile(from source: URL, defaultExtension: String) -> URL? {
         let ext = source.pathExtension.isEmpty ? defaultExtension : source.pathExtension
         let destination = FileManager.default.temporaryDirectory
@@ -32,7 +30,6 @@ private enum EmbeddedWebViewFileUploadCopy {
             return nil
         }
     }
-
     nonisolated static func copySecurityScopedToTemp(_ url: URL) -> URL? {
         let didAccess = url.startAccessingSecurityScopedResource()
         defer {
@@ -43,7 +40,6 @@ private enum EmbeddedWebViewFileUploadCopy {
         let ext = url.pathExtension.isEmpty ? "bin" : url.pathExtension
         return copyToTemporaryFile(from: url, defaultExtension: ext)
     }
-
     nonisolated static func writeJPEGToTemp(_ data: Data) -> URL? {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: false)
@@ -56,16 +52,13 @@ private enum EmbeddedWebViewFileUploadCopy {
         }
     }
 }
-
-/// Обработка `<input type="file">`: галерея (PHPicker), камера, выбор файлов/папок через системные пикеры; в WebKit передаются копии во временной директории (без запроса полного доступа к ФС).
 @available(iOS 18.4, *)
 @MainActor
-final class EmbeddedWebViewFileUploadCoordinator: NSObject {
+final class EmbeddedFileUploadCoordinator: NSObject {
     private let parameters: WKOpenPanelParameters
     private weak var host: UIViewController?
     private weak var anchorView: UIView?
     private let completion: ([URL]?) -> Void
-
     init(
         parameters: WKOpenPanelParameters,
         host: UIViewController,
@@ -77,13 +70,11 @@ final class EmbeddedWebViewFileUploadCoordinator: NSObject {
         self.anchorView = anchorView
         self.completion = completion
     }
-
     func begin() {
         guard let host else {
             completion(nil)
             return
         }
-
         let alert = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
         alert.addAction(UIAlertAction(title: "Photo Library", style: .default) { [weak self] _ in
             self?.presentPhotoLibrary(from: host)
@@ -104,16 +95,13 @@ final class EmbeddedWebViewFileUploadCoordinator: NSObject {
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
             self?.finish(nil)
         })
-
         if let popover = alert.popoverPresentationController, let anchor = anchorView {
             popover.sourceView = anchor
             popover.sourceRect = CGRect(x: anchor.bounds.midX, y: anchor.bounds.midY, width: 1, height: 1)
             popover.permittedArrowDirections = []
         }
-
         host.present(alert, animated: true)
     }
-
     private func finish(_ urls: [URL]?) {
         if let urls, !urls.isEmpty {
             completion(urls)
@@ -121,18 +109,15 @@ final class EmbeddedWebViewFileUploadCoordinator: NSObject {
             completion(nil)
         }
     }
-
     private func presentPhotoLibrary(from host: UIViewController) {
         var config = PHPickerConfiguration(photoLibrary: .shared())
         config.filter = .any(of: [.images, .livePhotos, .videos])
         config.selectionLimit = parameters.allowsMultipleSelection ? 0 : 1
         config.preferredAssetRepresentationMode = .current
-
         let picker = PHPickerViewController(configuration: config)
         picker.delegate = self
         host.present(picker, animated: true)
     }
-
     private func presentCamera(from host: UIViewController) {
         let picker = UIImagePickerController()
         picker.sourceType = .camera
@@ -144,7 +129,6 @@ final class EmbeddedWebViewFileUploadCoordinator: NSObject {
         }
         host.present(picker, animated: true)
     }
-
     private func presentDocumentPicker(from host: UIViewController, foldersOnly: Bool) {
         let types: [UTType] = foldersOnly ? [.folder] : [.item]
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
@@ -157,30 +141,26 @@ final class EmbeddedWebViewFileUploadCoordinator: NSObject {
         host.present(picker, animated: true)
     }
 }
-
 @available(iOS 18.4, *)
-extension EmbeddedWebViewFileUploadCoordinator: PHPickerViewControllerDelegate {
+extension EmbeddedFileUploadCoordinator: PHPickerViewControllerDelegate {
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
         picker.dismiss(animated: true)
         guard !results.isEmpty else {
             finish(nil)
             return
         }
-
         let group = DispatchGroup()
         var collected: [URL] = []
         let lock = NSLock()
-
         for result in results {
             group.enter()
             let provider = result.itemProvider
-
             if provider.canLoadObject(ofClass: UIImage.self) {
                 provider.loadObject(ofClass: UIImage.self) { image, _ in
                     defer { group.leave() }
                     guard let uiImage = image as? UIImage,
                           let data = uiImage.jpegData(compressionQuality: 0.92),
-                          let url = EmbeddedWebViewFileUploadCopy.writeJPEGToTemp(data) else { return }
+                          let url = EmbeddedFileUploadCopy.writeJPEGToTemp(data) else { return }
                     lock.lock()
                     collected.append(url)
                     lock.unlock()
@@ -189,7 +169,7 @@ extension EmbeddedWebViewFileUploadCoordinator: PHPickerViewControllerDelegate {
                 provider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { url, _ in
                     defer { group.leave() }
                     guard let url,
-                          let copied = EmbeddedWebViewFileUploadCopy.copyToTemporaryFile(from: url, defaultExtension: "mov") else { return }
+                          let copied = EmbeddedFileUploadCopy.copyToTemporaryFile(from: url, defaultExtension: "mov") else { return }
                     lock.lock()
                     collected.append(copied)
                     lock.unlock()
@@ -198,46 +178,41 @@ extension EmbeddedWebViewFileUploadCoordinator: PHPickerViewControllerDelegate {
                 provider.loadFileRepresentation(forTypeIdentifier: UTType.image.identifier) { url, _ in
                     defer { group.leave() }
                     guard let url,
-                          let copied = EmbeddedWebViewFileUploadCopy.copyToTemporaryFile(from: url, defaultExtension: "jpg") else { return }
+                          let copied = EmbeddedFileUploadCopy.copyToTemporaryFile(from: url, defaultExtension: "jpg") else { return }
                     lock.lock()
                     collected.append(copied)
                     lock.unlock()
                 }
             }
         }
-
         group.notify(queue: .main) { [weak self] in
             self?.finish(collected.isEmpty ? nil : collected)
         }
     }
 }
-
 @available(iOS 18.4, *)
-extension EmbeddedWebViewFileUploadCoordinator: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+extension EmbeddedFileUploadCoordinator: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true)
         finish(nil)
     }
-
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
         picker.dismiss(animated: true)
         guard let image = info[.originalImage] as? UIImage,
               let data = image.jpegData(compressionQuality: 0.92),
-              let url = EmbeddedWebViewFileUploadCopy.writeJPEGToTemp(data) else {
+              let url = EmbeddedFileUploadCopy.writeJPEGToTemp(data) else {
             finish(nil)
             return
         }
         finish([url])
     }
 }
-
 @available(iOS 18.4, *)
-extension EmbeddedWebViewFileUploadCoordinator: UIDocumentPickerDelegate {
+extension EmbeddedFileUploadCoordinator: UIDocumentPickerDelegate {
     func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
         controller.dismiss(animated: true)
         finish(nil)
     }
-
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         controller.dismiss(animated: true)
         guard !urls.isEmpty else {
@@ -246,7 +221,7 @@ extension EmbeddedWebViewFileUploadCoordinator: UIDocumentPickerDelegate {
         }
         var out: [URL] = []
         for url in urls {
-            if let copied = EmbeddedWebViewFileUploadCopy.copySecurityScopedToTemp(url) {
+            if let copied = EmbeddedFileUploadCopy.copySecurityScopedToTemp(url) {
                 out.append(copied)
             }
         }

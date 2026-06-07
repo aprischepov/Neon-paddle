@@ -1,40 +1,30 @@
 import Foundation
 import AppsFlyerLib
-
-/// Приём данных Unified Deep Linking и сохранение для последующего POST конфига.
 final class AppsFlyerUDLBridge: NSObject, DeepLinkDelegate {
     static let shared = AppsFlyerUDLBridge()
-
     private override init() {
         super.init()
     }
-
     func attach() {
         AppsFlyerLib.shared().deepLinkDelegate = self
     }
-
     func didResolveDeepLink(_ result: DeepLinkResult) {
         DispatchQueue.main.async {
             self.handle(result)
         }
     }
-
     private func handle(_ result: DeepLinkResult) {
         guard GrayFlowGate.isEnabled else { return }
         guard result.status == .found, let deepLink = result.deepLink else { return }
-
         let fromClickEvent = Self.normalizedClickEvent(deepLink)
         var merged = fromClickEvent
         Self.supplement(from: deepLink, into: &merged)
         merged = AppsFlyerConversionPayload.sanitizedAttributionPayload(merged)
-
         guard AppsFlyerConversionPayload.isSubstantiveAttributionPayload(merged) else { return }
-
         AppsFlyerUDLPayloadStore.save(merged)
         NotificationCenter.default.post(name: .appsFlyerUDLPayloadDidUpdate, object: nil)
         RemoteConfigCoordinator.shared.notifyConfigContextUpdated()
     }
-
     private static func normalizedClickEvent(_ deepLink: DeepLink) -> [String: Any] {
         let event = deepLink.clickEvent
         var raw: [AnyHashable: Any] = [:]
@@ -44,8 +34,6 @@ final class AppsFlyerUDLBridge: NSObject, DeepLinkDelegate {
         }
         return AppsFlyerConversionPayload.normalized(from: raw)
     }
-
-    /// Поля из объекта `DeepLink`, если в `clickEvent` ещё нет такого ключа.
     private static func supplement(from deepLink: DeepLink, into merged: inout [String: Any]) {
         func put(_ key: String, _ value: Any?) {
             guard merged[key] == nil else { return }
@@ -57,7 +45,6 @@ final class AppsFlyerUDLBridge: NSObject, DeepLinkDelegate {
                 merged[key] = value
             }
         }
-
         put("deep_link_value", deepLink.deeplinkValue)
         put("match_type", deepLink.matchType)
         put("click_http_referrer", deepLink.clickHTTPReferrer)
@@ -69,18 +56,14 @@ final class AppsFlyerUDLBridge: NSObject, DeepLinkDelegate {
         put("af_sub3", deepLink.afSub3)
         put("af_sub4", deepLink.afSub4)
         put("af_sub5", deepLink.afSub5)
-
         if merged["is_deferred"] == nil {
             merged["is_deferred"] = deepLink.isDeferred
         }
-
         let clickEvent = deepLink.clickEvent
         for key in Self.oneLinkSupplementKeys {
             put(key, clickEvent[key])
         }
     }
-
-    /// Поля OneLink / UDL, которые часто приходят только в `clickEvent`.
     private static let oneLinkSupplementKeys = [
         "is_retargeting",
         "agency",

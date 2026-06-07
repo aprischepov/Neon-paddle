@@ -1,13 +1,9 @@
 import Foundation
 import AmplitudeSwift
-
 final class AmplitudeAnalyticsService {
     static let shared = AmplitudeAnalyticsService()
-
     private var amplitude: Amplitude?
-
     private init() {}
-
     func start() {
         let key = ThirdPartyKeys.amplitudeAPIKey
         guard !key.isEmpty else {
@@ -18,7 +14,6 @@ final class AmplitudeAnalyticsService {
         amplitude = Amplitude(configuration: configuration)
         AppLogger.debug("Amplitude SDK started", category: "Amplitude")
     }
-
     func track(event name: String, properties: [String: Any]? = nil) {
         guard let amplitude else { return }
         if let properties {
@@ -27,7 +22,6 @@ final class AmplitudeAnalyticsService {
             amplitude.track(eventType: name)
         }
     }
-
     func setUserId(_ userId: String?) {
         amplitude?.setUserId(userId: userId)
     }

@@ -1,10 +1,6 @@
 import Foundation
 import os
-
 enum AppLogger {
-
-    // MARK: - Event names
-
     enum Event {
         static let appLaunched = "app_launched"
         static let appForeground = "app_foreground"
@@ -25,12 +21,8 @@ enum AppLogger {
         static let profileUpdated = "profile_updated"
         static let profilePhotoChanged = "profile_photo_changed"
     }
-
     private static let subsystem = Bundle.main.bundleIdentifier ?? "GlowBounce"
     private static let osLog = Logger(subsystem: subsystem, category: "Analytics")
-
-    // MARK: - Public API
-
     static func track(
         _ event: String,
         properties: [String: Any]? = nil,
@@ -41,13 +33,11 @@ enum AppLogger {
         logLocal(event: event, properties: sanitized, file: file, line: line)
         AmplitudeAnalyticsService.shared.track(event: event, properties: sanitized)
     }
-
     static func screen(_ name: String, properties: [String: Any]? = nil) {
         var props = properties ?? [:]
         props["screen"] = name
         track(Event.screenView, properties: props)
     }
-
     static func debug(_ message: String, category: String = "App") {
         let formatted = "[\(category)] \(message)"
         #if DEBUG
@@ -55,7 +45,6 @@ enum AppLogger {
         #endif
         osLog.debug("\(formatted, privacy: .public)")
     }
-
     static func warning(_ message: String, properties: [String: Any]? = nil) {
         let formatted = "[Warning] \(message)"
         #if DEBUG
@@ -66,9 +55,6 @@ enum AppLogger {
         props["message"] = message
         AmplitudeAnalyticsService.shared.track(event: "app_warning", properties: props)
     }
-
-    // MARK: - Private
-
     private static func logLocal(
         event: String,
         properties: [String: Any]?,
@@ -92,7 +78,6 @@ enum AppLogger {
         #endif
         osLog.info("\(line, privacy: .public)")
     }
-
     private static func sanitize(_ properties: [String: Any]?) -> [String: Any]? {
         guard let properties, !properties.isEmpty else { return nil }
         var result: [String: Any] = [:]
@@ -103,7 +88,6 @@ enum AppLogger {
         }
         return result.isEmpty ? nil : result
     }
-
     private static func sanitizeValue(_ value: Any) -> Any? {
         switch value {
         case let v as String: return v

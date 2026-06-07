@@ -1,21 +1,15 @@
 import SpriteKit
 import UIKit
-
-/// Карточка профиля: аватар (фото или инициалы), ник. Тап по карточке — `profileCardRoot`.
 enum GameSettingsProfileCard {
     static let rootNodeName = "profileCardRoot"
-
-    /// Высоты плашки (портрет компактнее — не «монолит» по центру экрана).
     enum Metrics {
         static func plateHeight(isPortrait: Bool) -> CGFloat {
             isPortrait ? 68 : 64
         }
-
         static func plateHalfHeight(isPortrait: Bool) -> CGFloat {
             plateHeight(isPortrait: isPortrait) * 0.5
         }
     }
-
     final class Handles {
         let root: SKNode
         private let nicknameLabel: SKLabelNode
@@ -23,7 +17,6 @@ enum GameSettingsProfileCard {
         private let initialsLabel: SKLabelNode
         private let avatarSprite: SKSpriteNode
         private let avatarDiameter: CGFloat
-
         init(
             root: SKNode,
             nicknameLabel: SKLabelNode,
@@ -39,12 +32,10 @@ enum GameSettingsProfileCard {
             self.avatarSprite = avatarSprite
             self.avatarDiameter = avatarDiameter
         }
-
         func refreshFromStore() {
             nicknameLabel.text = PlayerProfileStore.cardTitleText()
             subtitleLabel.text = PlayerProfileStore.cardSubtitleText()
             initialsLabel.text = PlayerProfileStore.initialsForAvatar()
-
             if let image = PlayerProfileStore.loadAvatarImage() {
                 Handles.layoutAvatarSprite(avatarSprite, image: image, diameter: avatarDiameter)
                 avatarSprite.isHidden = false
@@ -55,7 +46,6 @@ enum GameSettingsProfileCard {
                 initialsLabel.isHidden = false
             }
         }
-
         private static func layoutAvatarSprite(_ sprite: SKSpriteNode, image: UIImage, diameter: CGFloat) {
             let tex = SKTexture(image: image)
             sprite.texture = tex
@@ -65,12 +55,10 @@ enum GameSettingsProfileCard {
             sprite.size = CGSize(width: iw * scale, height: ih * scale)
         }
     }
-
     enum Layout {
         case portrait(cardCenter: CGPoint, cardWidth: CGFloat)
         case landscape(cardCenter: CGPoint, cardWidth: CGFloat)
     }
-
     @discardableResult
     static func attach(to parent: SKNode, layout: Layout) -> Handles {
         let (center, width): (CGPoint, CGFloat) = {
@@ -79,12 +67,10 @@ enum GameSettingsProfileCard {
             case let .landscape(c, w): return (c, w)
             }
         }()
-
         let root = SKNode()
         root.name = rootNodeName
         root.position = center
         parent.addChild(root)
-
         let plateW = min(width, 360)
         let plateH = Metrics.plateHeight(isPortrait: layout.isPortrait)
         let corner = min(GameMenuAppearance.pillCornerRadius, plateH * 0.46)
@@ -98,11 +84,9 @@ enum GameSettingsProfileCard {
         plate.glowWidth = 0
         plate.zPosition = 0
         root.addChild(plate)
-
         let avatarR: CGFloat = layout.isPortrait ? 26 : 24
         let avatarDiameter = avatarR * 2
         let avatarX = -plateW * 0.5 + 18 + avatarR
-
         let backdrop = SKShapeNode(circleOfRadius: avatarR)
         backdrop.position = CGPoint(x: avatarX, y: 0)
         backdrop.fillColor = GameMenuAppearance.avatarWellFill
@@ -111,20 +95,16 @@ enum GameSettingsProfileCard {
         backdrop.glowWidth = 0
         backdrop.zPosition = 1
         root.addChild(backdrop)
-
         let maskNode = SKShapeNode(circleOfRadius: avatarR)
         maskNode.fillColor = .white
-
         let crop = SKCropNode()
         crop.maskNode = maskNode
         crop.position = CGPoint(x: avatarX, y: 0)
         crop.zPosition = 2
-
         let avatarSprite = SKSpriteNode()
         avatarSprite.zPosition = 0
         crop.addChild(avatarSprite)
         root.addChild(crop)
-
         let initials = GameMenuAppearance.label(
             text: PlayerProfileStore.initialsForAvatar(),
             size: layout.isPortrait ? 15 : 14,
@@ -136,7 +116,6 @@ enum GameSettingsProfileCard {
         initials.position = CGPoint(x: avatarX, y: 0)
         initials.zPosition = 3
         root.addChild(initials)
-
         let textLeftX = avatarX + avatarR + 14
         let nick = GameMenuAppearance.label(
             text: PlayerProfileStore.cardTitleText(),
@@ -149,7 +128,6 @@ enum GameSettingsProfileCard {
         nick.position = CGPoint(x: textLeftX, y: layout.isPortrait ? 7 : 6)
         nick.zPosition = 1
         root.addChild(nick)
-
         let sub = GameMenuAppearance.label(
             text: PlayerProfileStore.cardSubtitleText(),
             size: layout.isPortrait ? 11 : 10,
@@ -161,14 +139,12 @@ enum GameSettingsProfileCard {
         sub.position = CGPoint(x: textLeftX, y: layout.isPortrait ? -9 : -8)
         sub.zPosition = 1
         root.addChild(sub)
-
         let hit = SKShapeNode(rectOf: CGSize(width: plateW + 8, height: plateH + 8), cornerRadius: corner + 2)
         hit.fillColor = .clear
         hit.strokeColor = .clear
         hit.name = rootNodeName
         hit.zPosition = 10
         root.addChild(hit)
-
         let handles = Handles(
             root: root,
             nicknameLabel: nick,
@@ -181,7 +157,6 @@ enum GameSettingsProfileCard {
         return handles
     }
 }
-
 private extension GameSettingsProfileCard.Layout {
     var isPortrait: Bool {
         if case .portrait = self { return true }

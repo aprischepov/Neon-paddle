@@ -1,10 +1,7 @@
 import WebKit
-
-/// Скролл / safe area / zoom для встроенного WebView (config, push).
-enum EmbeddedWebViewScrollPolicy {
-
-    static func apply(to webView: WKWebView) {
-        let scrollView = webView.scrollView
+enum EmbeddedScrollPolicy {
+    static func apply(to surfaceView: WKWebView) {
+        let scrollView = surfaceView.scrollView
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.automaticallyAdjustsScrollIndicatorInsets = false
         scrollView.contentInset = .zero
@@ -14,8 +11,6 @@ enum EmbeddedWebViewScrollPolicy {
         scrollView.bouncesZoom = false
         scrollView.pinchGestureRecognizer?.isEnabled = false
     }
-
-    /// Дополнительно к масштабу scrollView — viewport на стороне страницы.
     static func installViewportZoomLock(on configuration: WKWebViewConfiguration) {
         let source = """
         (function() {

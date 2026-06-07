@@ -1,15 +1,11 @@
 import UIKit
-
-/// Сплеш: вариант A — игра; вариант B (или сохранённый серый режим) — полный post-attribution флоу из release.
 final class SplashViewController: UIViewController {
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
         AppOrientationPolicy.supportedInterfaceOrientations
     }
-
     override var shouldAutorotate: Bool {
         AppOrientationPolicy.shouldAutorotate
     }
-
     private let imageView = UIImageView()
     private let loadingStack = UIStackView()
     private let spinnerImageView = UIImageView()
@@ -26,7 +22,6 @@ final class SplashViewController: UIViewController {
     private var configGateReadyObserver: NSObjectProtocol?
     private var maxSplashTimer: Timer?
     private var firstLaunchConfigRequestSent = false
-
     private let firstLaunchMaximumSplashDuration: TimeInterval = 10
     private let variantDecisionTimeout: TimeInterval = 8
     private let loadingStackSpacing: CGFloat = 20
@@ -34,29 +29,24 @@ final class SplashViewController: UIViewController {
     private let loadingImageMaxWidthRatio: CGFloat = 0.5
     private let spinnerRotationDuration: TimeInterval = 1.2
     private let spinnerRotationKey = "spinnerRotation"
-
     override func viewDidLoad() {
         super.viewDidLoad()
         AppLogger.screen("splash")
         view.backgroundColor = .black
-
         imageView.translatesAutoresizingMaskIntoConstraints = false
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
         view.addSubview(imageView)
         configureLoadingStack()
         setSpinnerVisible(true)
-
         NSLayoutConstraint.activate([
             imageView.topAnchor.constraint(equalTo: view.topAnchor),
             imageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             imageView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             imageView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
-
         updateSplashImage()
     }
-
     private func configureLoadingStack() {
         loadingStack.translatesAutoresizingMaskIntoConstraints = false
         loadingStack.axis = .vertical
@@ -64,32 +54,25 @@ final class SplashViewController: UIViewController {
         loadingStack.alignment = .center
         loadingStack.isHidden = true
         loadingStack.isAccessibilityElement = false
-
         spinnerImageView.translatesAutoresizingMaskIntoConstraints = false
         spinnerImageView.image = UIImage(named: "spinner")
         spinnerImageView.contentMode = .scaleAspectFit
-
         loadingImageView.translatesAutoresizingMaskIntoConstraints = false
         let loadingImage = UIImage(named: "loading")
         loadingImageView.image = loadingImage
         loadingImageView.contentMode = .scaleAspectFit
-
         loadingStack.addArrangedSubview(spinnerImageView)
         loadingStack.addArrangedSubview(loadingImageView)
         view.addSubview(loadingStack)
         view.bringSubviewToFront(loadingStack)
-
         let safe = view.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
             loadingStack.centerXAnchor.constraint(equalTo: safe.centerXAnchor),
             loadingStack.centerYAnchor.constraint(equalTo: safe.centerYAnchor),
-
             spinnerImageView.widthAnchor.constraint(equalToConstant: spinnerImageSize),
             spinnerImageView.heightAnchor.constraint(equalToConstant: spinnerImageSize),
-
             loadingImageView.widthAnchor.constraint(lessThanOrEqualTo: safe.widthAnchor, multiplier: loadingImageMaxWidthRatio),
         ])
-
         if let loadingImage, loadingImage.size.width > 0 {
             loadingImageView.heightAnchor.constraint(
                 equalTo: loadingImageView.widthAnchor,
@@ -97,7 +80,6 @@ final class SplashViewController: UIViewController {
             ).isActive = true
         }
     }
-
     private func setSpinnerVisible(_ visible: Bool) {
         loadingStack.isHidden = !visible
         if visible {
@@ -106,54 +88,42 @@ final class SplashViewController: UIViewController {
             stopSpinnerRotation()
         }
     }
-
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         guard !didFinishSplash else { return }
-
         if GrayFlowGate.hasPersistedGrayMode {
             beginGrayFlowRouting()
             return
         }
-
         startVariantAwareRoutingIfNeeded()
     }
-
     deinit {
         abConfigTimeoutTimer?.invalidate()
         maxSplashTimer?.invalidate()
         teardownABObservers()
         teardownFirstLaunchObservers()
     }
-
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
         coordinator.animate(alongsideTransition: { _ in self.updateSplashImage() })
     }
-
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         updateSplashImage()
     }
-
     private func updateSplashImage() {
         guard view.bounds.width > 0, view.bounds.height > 0 else { return }
         let isLandscape = view.bounds.width > view.bounds.height
         imageView.image = UIImage(named: isLandscape ? "splashHorizontal" : "splashVertical")
     }
-
-    // MARK: - Variant A / B routing
-
     private func startVariantAwareRoutingIfNeeded() {
         guard !variantRoutingStarted else { return }
         variantRoutingStarted = true
         setSpinnerVisible(true)
-
         if GrayFlowGate.isVariantB {
             beginGrayFlowRouting()
             return
         }
-
         abConfigObserver = NotificationCenter.default.addObserver(
             forName: .abTestingConfigDidUpdate,
             object: nil,
@@ -161,7 +131,6 @@ final class SplashViewController: UIViewController {
         ) { [weak self] _ in
             self?.handleVariantDecisionReady()
         }
-
         abConfigTimeoutTimer = Timer.scheduledTimer(withTimeInterval: variantDecisionTimeout, repeats: false) { [weak self] _ in
             self?.handleVariantDecisionReady()
         }
@@ -169,18 +138,15 @@ final class SplashViewController: UIViewController {
             RunLoop.main.add(abConfigTimeoutTimer, forMode: .common)
         }
     }
-
     private func handleVariantDecisionReady() {
         teardownABObservers()
         guard !didFinishSplash else { return }
-
         if GrayFlowGate.isEnabled {
             beginGrayFlowRouting()
         } else {
             transitionToGame()
         }
     }
-
     private func beginGrayFlowRouting() {
         GrayFlowBootstrap.activateIfNeeded()
         if AppStartupSettings.resolvedMode != nil {
@@ -189,7 +155,6 @@ final class SplashViewController: UIViewController {
             startFirstLaunchPipelineIfNeeded()
         }
     }
-
     private func transitionToGame() {
         guard !didFinishSplash else { return }
         didFinishSplash = true
@@ -205,7 +170,6 @@ final class SplashViewController: UIViewController {
             window.rootViewController = gameVC
         }
     }
-
     private func teardownABObservers() {
         abConfigTimeoutTimer?.invalidate()
         abConfigTimeoutTimer = nil
@@ -214,45 +178,35 @@ final class SplashViewController: UIViewController {
             self.abConfigObserver = nil
         }
     }
-
-    // MARK: - Gray recurring launch
-
     private func completeRecurringSplashTransition() {
         guard !didFinishSplash else { return }
         didFinishSplash = true
         setSpinnerVisible(false)
         guard let window = view.window else { return }
-
-        if window.rootViewController is PushPayloadWebViewController {
-            if AppStartupSettings.resolvedMode == .webView,
+        if window.rootViewController is PushPayloadSurfaceController {
+            if AppStartupSettings.resolvedMode == .inlineSurface,
                RemoteConfigStore.shouldRefreshFromEndpoint {
                 RemoteConfigFetchService.shared.requestConfigRefresh()
             }
             return
         }
-
         if PendingPushURLStore.hasPendingURL {
             PushNotificationRouting.flushPendingIfPossible()
             if !PendingPushURLStore.hasPendingURL {
-                if AppStartupSettings.resolvedMode == .webView,
+                if AppStartupSettings.resolvedMode == .inlineSurface,
                    RemoteConfigStore.shouldRefreshFromEndpoint {
                     RemoteConfigFetchService.shared.requestConfigRefresh()
                 }
                 return
             }
         }
-
         ApplicationFlowResolver.transitionFromSplash(window: window)
     }
-
-    // MARK: - Gray first launch
-
     private func startFirstLaunchPipelineIfNeeded() {
         guard !firstLaunchPipelineStarted else { return }
         firstLaunchPipelineStarted = true
         awaitingFirstLaunchRouting = true
         setSpinnerVisible(true)
-
         routingObserver = NotificationCenter.default.addObserver(
             forName: .appStartupRoutingReady,
             object: nil,
@@ -260,7 +214,6 @@ final class SplashViewController: UIViewController {
         ) { [weak self] _ in
             self?.handleFirstLaunchRoutingReady()
         }
-
         transportObserver = NotificationCenter.default.addObserver(
             forName: .appStartupConfigTransportFailed,
             object: nil,
@@ -268,7 +221,6 @@ final class SplashViewController: UIViewController {
         ) { [weak self] _ in
             self?.handleFirstLaunchTransportFailed()
         }
-
         connectivityObserver = NotificationCenter.default.addObserver(
             forName: .connectivityDidChange,
             object: nil,
@@ -276,14 +228,12 @@ final class SplashViewController: UIViewController {
         ) { [weak self] _ in
             self?.handleFirstLaunchConnectivityChange()
         }
-
         maxSplashTimer = Timer.scheduledTimer(withTimeInterval: firstLaunchMaximumSplashDuration, repeats: false) { [weak self] _ in
             self?.handleFirstLaunchMaxSplashElapsed()
         }
         if let maxSplashTimer {
             RunLoop.main.add(maxSplashTimer, forMode: .common)
         }
-
         if AppStartupSettings.resolvedMode != nil {
             handleFirstLaunchRoutingReady()
             return
@@ -292,7 +242,6 @@ final class SplashViewController: UIViewController {
             showNoInternetRootFromSplash()
             return
         }
-
         configGateReadyObserver = NotificationCenter.default.addObserver(
             forName: .firstLaunchConfigGateDidBecomeReady,
             object: nil,
@@ -300,21 +249,17 @@ final class SplashViewController: UIViewController {
         ) { [weak self] _ in
             self?.requestFirstLaunchConfigIfNeeded()
         }
-
         FirstLaunchConfigGate.shared.beginWaitingForAttribution(maxDuration: firstLaunchMaximumSplashDuration)
-
         if FirstLaunchConfigGate.shared.isReadyForConfigRequest {
             requestFirstLaunchConfigIfNeeded()
         }
     }
-
     private func requestFirstLaunchConfigIfNeeded() {
         guard awaitingFirstLaunchRouting else { return }
         guard AppStartupSettings.resolvedMode == nil else { return }
         firstLaunchConfigRequestSent = true
         RemoteConfigFetchService.shared.requestConfigRefresh()
     }
-
     private func handleFirstLaunchRoutingReady() {
         guard awaitingFirstLaunchRouting else { return }
         guard AppStartupSettings.resolvedMode != nil else { return }
@@ -323,7 +268,6 @@ final class SplashViewController: UIViewController {
         FirstLaunchConfigGate.shared.cancelSplashTimeout()
         finishFirstLaunchRouting()
     }
-
     private func handleFirstLaunchTransportFailed() {
         guard awaitingFirstLaunchRouting else { return }
         if !ConnectivityMonitor.shared.isOnline {
@@ -332,7 +276,6 @@ final class SplashViewController: UIViewController {
             RemoteConfigFetchService.shared.requestConfigRefresh()
         }
     }
-
     private func handleFirstLaunchConnectivityChange() {
         guard awaitingFirstLaunchRouting else { return }
         if !ConnectivityMonitor.shared.isOnline {
@@ -340,16 +283,13 @@ final class SplashViewController: UIViewController {
             showNoInternetRootFromSplash()
         }
     }
-
     private func handleFirstLaunchMaxSplashElapsed() {
         guard awaitingFirstLaunchRouting else { return }
         if AppStartupSettings.resolvedMode != nil {
             handleFirstLaunchRoutingReady()
             return
         }
-
         FirstLaunchConfigGate.shared.forceReadyForSplashDeadline()
-
         let hasAttribution = AppsFlyerAttributionService.shared.currentConversionPayload() != nil
         if hasAttribution || firstLaunchConfigRequestSent {
             if !firstLaunchConfigRequestSent {
@@ -361,10 +301,8 @@ final class SplashViewController: UIViewController {
             handleFirstLaunchRoutingReady()
             return
         }
-
         showNoInternetRootFromSplash()
     }
-
     private func finishFirstLaunchRouting() {
         guard let window = view.window else { return }
         guard !didFinishSplash, awaitingFirstLaunchRouting else { return }
@@ -377,7 +315,6 @@ final class SplashViewController: UIViewController {
         AppLogger.track(AppLogger.Event.splashTransition, properties: ["variant": "B"])
         ApplicationFlowResolver.applyRoutingReadyIfNeeded(window: window)
     }
-
     private func showNoInternetRootFromSplash() {
         maxSplashTimer?.invalidate()
         maxSplashTimer = nil
@@ -390,7 +327,6 @@ final class SplashViewController: UIViewController {
             window.rootViewController = NoInternetViewController(reason: .firstLaunchConfigPending)
         }
     }
-
     private func teardownFirstLaunchObservers() {
         if let routingObserver {
             NotificationCenter.default.removeObserver(routingObserver)
@@ -409,7 +345,6 @@ final class SplashViewController: UIViewController {
             self.configGateReadyObserver = nil
         }
     }
-
     private func startSpinnerRotation() {
         guard spinnerImageView.layer.animation(forKey: spinnerRotationKey) == nil else { return }
         let rotation = CABasicAnimation(keyPath: "transform.rotation.z")
@@ -420,7 +355,6 @@ final class SplashViewController: UIViewController {
         rotation.isRemovedOnCompletion = false
         spinnerImageView.layer.add(rotation, forKey: spinnerRotationKey)
     }
-
     private func stopSpinnerRotation() {
         spinnerImageView.layer.removeAnimation(forKey: spinnerRotationKey)
     }

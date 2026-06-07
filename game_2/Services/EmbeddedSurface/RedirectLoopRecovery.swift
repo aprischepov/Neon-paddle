@@ -1,8 +1,6 @@
 import UIKit
 import WebKit
-
-/// Обработка `NSURLErrorHTTPTooManyRedirects` (-1007): однократная перезагрузка после ручного разворачивания цепочки 3xx вне WebKit.
-enum WKWebViewRedirectLoopRecovery {
+enum RedirectLoopRecovery {
     private static func isTooManyRedirects(_ error: Error) -> Bool {
         if let urlError = error as? URLError, urlError.code == .httpTooManyRedirects {
             return true
@@ -16,7 +14,6 @@ enum WKWebViewRedirectLoopRecovery {
         }
         return false
     }
-
     private static func failingURL(from error: Error) -> URL? {
         if let urlError = error as? URLError, let url = urlError.failureURL {
             return url
@@ -40,14 +37,11 @@ enum WKWebViewRedirectLoopRecovery {
         }
         return nil
     }
-
     final class Session {
         private(set) var lastProvisionalRedirectURL: URL?
-        /// Последний URL основного фрейма из `decidePolicyFor` (редиректы тоже приходят сюда).
         private var lastMainFramePolicyURL: URL?
         private var recoveryLoadIssued = false
         private var isRecoveryNavigation = false
-
         func noteProvisionalNavigationStarted() {
             lastProvisionalRedirectURL = nil
             if !isRecoveryNavigation {
@@ -55,37 +49,30 @@ enum WKWebViewRedirectLoopRecovery {
             }
             isRecoveryNavigation = false
         }
-
         func noteMainFrameProvisionalURL(_ url: URL?) {
             guard let url else { return }
             lastMainFramePolicyURL = url
         }
-
         func noteServerRedirect(targetURL: URL?) {
             lastProvisionalRedirectURL = targetURL
         }
-
         var hasIssuedRecoveryLoad: Bool {
             recoveryLoadIssued
         }
-
         func recoveryCandidateURL(for error: Error, fallbackURL: URL?) -> URL? {
             lastProvisionalRedirectURL
                 ?? lastMainFramePolicyURL
-                ?? WKWebViewRedirectLoopRecovery.failingURL(from: error)
+                ?? RedirectLoopRecovery.failingURL(from: error)
                 ?? fallbackURL
         }
-
         func markRecoveryLoadIssuedForNextNavigation() {
             recoveryLoadIssued = true
             isRecoveryNavigation = true
         }
     }
-
-    /// Одна попытка: развернуть 3xx через `URLSession`, затем `load` в WebView.
     @MainActor
     static func handleTooManyRedirectsRecoveryIfNeeded(
-        webView: WKWebView,
+        surfaceView: WKWebView,
         error: Error,
         session: Session,
         fallbackURL: URL?
@@ -94,7 +81,7 @@ enum WKWebViewRedirectLoopRecovery {
         guard !session.hasIssuedRecoveryLoad else { return false }
         guard let candidate = session.recoveryCandidateURL(for: error, fallbackURL: fallbackURL) else { return false }
         session.markRecoveryLoadIssuedForNextNavigation()
-        let ua = webView.customUserAgent ?? WebViewUserAgentBuilder.standardEmbeddedUserAgent()
+        let ua = surfaceView.customUserAgent ?? EmbeddedClientAgentBuilder.standardEmbeddedUserAgent()
         let urlToLoad: URL
         do {
             urlToLoad = try await HTTPRedirectChainResolver.resolve(
@@ -105,11 +92,10 @@ enum WKWebViewRedirectLoopRecovery {
         } catch {
             urlToLoad = candidate
         }
-        webView.load(URLRequest(url: urlToLoad))
+        surfaceView.load(URLRequest(url: urlToLoad))
         return true
     }
 }
-
 private extension URLError {
     var failureURL: URL? {
         if let u = userInfo[NSURLErrorFailingURLErrorKey] as? URL {

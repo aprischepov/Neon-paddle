@@ -1,7 +1,5 @@
 import Foundation
-
 enum AppsFlyerConversionPayload {
-
     private static let nonAttributionKeys: Set<String> = [
         "statusCode",
         "status",
@@ -12,11 +10,9 @@ enum AppsFlyerConversionPayload {
         "code",
         "httpStatus",
     ]
-
     static func sanitizedAttributionPayload(_ payload: [String: Any]) -> [String: Any] {
         payload.filter { !nonAttributionKeys.contains($0.key) }
     }
-
     static func isSubstantiveAttributionPayload(_ payload: [String: Any]) -> Bool {
         let keys = Set(payload.keys)
         if keys.contains("af_status") { return true }
@@ -28,7 +24,6 @@ enum AppsFlyerConversionPayload {
         if keys.contains("is_retargeting") { return true }
         return false
     }
-
     static func mergingAttribution(existing: [String: Any], incoming: [String: Any]) -> [String: Any] {
         var merged = sanitizedAttributionPayload(existing)
         for (key, value) in sanitizedAttributionPayload(incoming) {
@@ -42,7 +37,6 @@ enum AppsFlyerConversionPayload {
         }
         return merged
     }
-
     static func normalized(from raw: [AnyHashable: Any]) -> [String: Any] {
         var result: [String: Any] = [:]
         result.reserveCapacity(raw.count)
@@ -52,15 +46,12 @@ enum AppsFlyerConversionPayload {
         }
         return result
     }
-
     static func jsonData(from dictionary: [String: Any]) -> Data? {
         try? JSONSerialization.data(withJSONObject: dictionary, options: [.sortedKeys])
     }
-
     static func dictionary(from jsonData: Data) -> [String: Any]? {
         (try? JSONSerialization.jsonObject(with: jsonData)) as? [String: Any]
     }
-
     private static func stringKey(from key: AnyHashable) -> String {
         switch key {
         case let string as String:
@@ -71,7 +62,6 @@ enum AppsFlyerConversionPayload {
             return String(describing: key)
         }
     }
-
     private static func jsonSafeValue(_ value: Any) -> Any {
         switch value {
         case let dict as [AnyHashable: Any]:
@@ -104,7 +94,6 @@ enum AppsFlyerConversionPayload {
         }
     }
 }
-
 extension Notification.Name {
     static let appsFlyerConversionDataDidUpdate = Notification.Name("appsFlyerConversionDataDidUpdate")
     static let appsFlyerConversionDataDidFail = Notification.Name("appsFlyerConversionDataDidFail")

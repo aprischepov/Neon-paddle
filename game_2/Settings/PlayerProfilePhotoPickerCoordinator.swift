@@ -1,19 +1,15 @@
 import UIKit
 import UniformTypeIdentifiers
-
-/// Камера / галерея / файлы для аватара профиля. Держите сильную ссылку, пока пикер на экране.
 final class PlayerProfilePhotoPickerCoordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate, UIDocumentPickerDelegate {
     private weak var host: UIViewController?
     private let onFinish: () -> Void
     private var retainSelf: PlayerProfilePhotoPickerCoordinator?
-
     init(host: UIViewController, onFinish: @escaping () -> Void) {
         self.host = host
         self.onFinish = onFinish
         super.init()
         retainSelf = self
     }
-
     func presentPhotoLibrary() {
         let picker = UIImagePickerController()
         picker.sourceType = .photoLibrary
@@ -22,7 +18,6 @@ final class PlayerProfilePhotoPickerCoordinator: NSObject, UIImagePickerControll
         configurePopover(for: picker)
         host?.present(picker, animated: true)
     }
-
     func presentCamera() {
         guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
             end()
@@ -36,7 +31,6 @@ final class PlayerProfilePhotoPickerCoordinator: NSObject, UIImagePickerControll
         configurePopover(for: picker)
         host?.present(picker, animated: true)
     }
-
     func presentDocumentPicker() {
         let types: [UTType] = [.image, .jpeg, .png, .heic, .gif]
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
@@ -45,27 +39,21 @@ final class PlayerProfilePhotoPickerCoordinator: NSObject, UIImagePickerControll
         configurePopover(for: picker)
         host?.present(picker, animated: true)
     }
-
     private func configurePopover(for picker: UIViewController) {
         guard let pop = picker.popoverPresentationController, let v = host?.view else { return }
         pop.sourceView = v
         pop.sourceRect = CGRect(x: v.bounds.midX, y: v.bounds.midY, width: 1, height: 1)
         pop.permittedArrowDirections = []
     }
-
     private func end() {
         retainSelf = nil
         onFinish()
     }
-
-    // MARK: - UIImagePickerControllerDelegate
-
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true) { [weak self] in
             self?.end()
         }
     }
-
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
         let image = (info[.editedImage] ?? info[.originalImage]) as? UIImage
         if let image {
@@ -75,13 +63,9 @@ final class PlayerProfilePhotoPickerCoordinator: NSObject, UIImagePickerControll
             self?.end()
         }
     }
-
-    // MARK: - UIDocumentPickerDelegate
-
     func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
         end()
     }
-
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         defer { end() }
         guard let url = urls.first else { return }

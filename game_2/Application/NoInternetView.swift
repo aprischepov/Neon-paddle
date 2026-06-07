@@ -1,14 +1,10 @@
 import Combine
 import SwiftUI
 import UIKit
-
-// MARK: - Shared types (UIKit host + SwiftUI)
-
 enum NoInternetPresentationReason {
     case firstLaunchConfigPending
-    case recurringWebViewOffline
+    case recurringSurfaceOffline
 }
-
 @MainActor
 protocol NoInternetScreenHost: AnyObject {
     func noInternetScreenDidAppear()
@@ -16,29 +12,21 @@ protocol NoInternetScreenHost: AnyObject {
     func noInternetRoutingReadyNotification()
     func noInternetConnectivityChanged()
 }
-
 @MainActor
 final class NoInternetScreenModel: ObservableObject {
     let reason: NoInternetPresentationReason
     weak var host: NoInternetScreenHost?
     @Published private(set) var isOnline: Bool
-
     init(reason: NoInternetPresentationReason) {
         self.reason = reason
         isOnline = ConnectivityMonitor.shared.isOnline
     }
-
     func refreshOnlineFlag() {
         isOnline = ConnectivityMonitor.shared.isOnline
     }
 }
-
-
-// MARK: - Pieces (обычная декомпозиция SwiftUI)
-
 private struct NoInternetBackgroundView: View {
     let isLandscape: Bool
-
     var body: some View {
         Image(isLandscape ? .connectBGHorizontal : .connectBGVertical)
             .resizable()
@@ -46,10 +34,8 @@ private struct NoInternetBackgroundView: View {
             .ignoresSafeArea()
     }
 }
-
 private struct NoInternetConnectPlaqueView: View {
     let isLandscape: Bool
-
     var body: some View {
         ZStack {
             if isLandscape {
@@ -70,12 +56,8 @@ private struct NoInternetConnectPlaqueView: View {
         }
     }
 }
-
-// MARK: - Screen (корневой SwiftUI-view)
-
 struct NoInternetView: View {
     @ObservedObject var model: NoInternetScreenModel
-
     var body: some View {
         GeometryReader { geo in
             let isLandscape = geo.size.width > geo.size.height
@@ -98,7 +80,6 @@ struct NoInternetView: View {
         }
     }
 }
-
 #if DEBUG
 #Preview("No Internet") {
     NoInternetView(model: NoInternetScreenModel(reason: .firstLaunchConfigPending))

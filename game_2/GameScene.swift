@@ -1,44 +1,28 @@
-//
-//  GameScene.swift
-//  Glow Bounce
-//
-//  Created by Artem Prischepov on 1.05.26.
-//
-
 import SpriteKit
 import UIKit
 import CoreImage
 import AVFoundation
-
 final class SoundManager {
     static let shared = SoundManager()
-
     static let soundEnabledKey = "soundEnabled"
-
     private let defaults: UserDefaults
     private var players: [String: AVAudioPlayer] = [:]
-
     private init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
     }
-
     func configure(hostNode: SKNode) {
         preloadSounds()
     }
-
     func playHitSound() {
         playSoundFileNamed("hit.wav")
     }
-
     func playScoreSound() {
         playSoundFileNamed("score.wav")
     }
-
     func preloadSounds() {
         ["hit.wav", "score.wav"].forEach { fileName in
             guard players[fileName] == nil else { return }
             guard let url = Bundle.main.url(forResource: fileName, withExtension: nil) else { return }
-
             do {
                 let player = try AVAudioPlayer(contentsOf: url)
                 player.prepareToPlay()
@@ -48,27 +32,21 @@ final class SoundManager {
             }
         }
     }
-
     private var isSoundEnabled: Bool {
         defaults.object(forKey: Self.soundEnabledKey) as? Bool ?? true
     }
-
     private func playSoundFileNamed(_ fileName: String) {
         guard isSoundEnabled else { return }
-
         if players[fileName] == nil {
             preloadSounds()
         }
-
         guard let player = players[fileName] else { return }
         player.currentTime = 0
         player.play()
     }
 }
-
 final class Ball: SKShapeNode {
     var lastTouchedBy = ""
-
     init(radius: CGFloat) {
         super.init()
         path = CGPath(
@@ -76,17 +54,14 @@ final class Ball: SKShapeNode {
             transform: nil
         )
     }
-
     required init?(coder aDecoder: NSCoder) {
         super.init(coder: aDecoder)
     }
 }
-
 final class FieldObject: SKShapeNode {
     enum ObjectType {
         case buff
         case hazard
-
         var color: UIColor {
             switch self {
             case .buff:
@@ -96,9 +71,7 @@ final class FieldObject: SKShapeNode {
             }
         }
     }
-
     let objectType: ObjectType
-
     init(type: ObjectType, sides: Int, radius: CGFloat) {
         objectType = type
         super.init()
@@ -109,31 +82,25 @@ final class FieldObject: SKShapeNode {
         glowWidth = 10
         addNeonGlow(color: type.color)
     }
-
     required init?(coder aDecoder: NSCoder) {
         objectType = .buff
         super.init(coder: aDecoder)
     }
-
     private static func makePolygonPath(sides: Int, radius: CGFloat) -> CGPath {
         let path = CGMutablePath()
         let clampedSides = max(sides, 3)
-
         for index in 0..<clampedSides {
             let angle = CGFloat(index) / CGFloat(clampedSides) * .pi * 2 + .pi / 2
             let point = CGPoint(x: cos(angle) * radius, y: sin(angle) * radius)
-
             if index == 0 {
                 path.move(to: point)
             } else {
                 path.addLine(to: point)
             }
         }
-
         path.closeSubpath()
         return path
     }
-
     func startAliveAnimation() {
         run(.repeatForever(.rotate(byAngle: .pi, duration: 2.0)), withKey: "fieldRotate")
         run(.repeatForever(.sequence([
@@ -141,16 +108,13 @@ final class FieldObject: SKShapeNode {
             .scale(to: 1.0, duration: 1.0)
         ])), withKey: "fieldPulse")
     }
-
     private func addNeonGlow(color: UIColor) {
         guard let path else { return }
-
         let glowEffect = SKEffectNode()
         glowEffect.name = "neonGlow"
         glowEffect.zPosition = -1
         glowEffect.filter = CIFilter(name: "CIGaussianBlur", parameters: [kCIInputRadiusKey: 9])
         glowEffect.shouldRasterize = true
-
         let innerGlow = SKShapeNode(path: path)
         innerGlow.fillColor = color
         innerGlow.strokeColor = color
@@ -158,7 +122,6 @@ final class FieldObject: SKShapeNode {
         innerGlow.alpha = 0.88
         innerGlow.blendMode = .add
         glowEffect.addChild(innerGlow)
-
         let outerGlow = SKShapeNode(path: path)
         outerGlow.fillColor = color
         outerGlow.strokeColor = color
@@ -166,11 +129,9 @@ final class FieldObject: SKShapeNode {
         outerGlow.alpha = 0.38
         outerGlow.blendMode = .add
         glowEffect.addChild(outerGlow)
-
         addChild(glowEffect)
     }
 }
-
 class GameScene: SKScene, SKPhysicsContactDelegate {
     private enum GameState {
         case start
@@ -180,12 +141,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         case paused
         case gameOver
     }
-
     private enum AIDifficulty: Int, CaseIterable {
         case easy
         case normal
         case hard
-
         var title: String {
             switch self {
             case .easy:
@@ -196,7 +155,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 return "Hard"
             }
         }
-
         var enemySpeed: CGFloat {
             switch self {
             case .easy:
@@ -208,11 +166,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
     }
-
     private enum GameMode: Int, CaseIterable {
         case classic
         case powerUps
-
         var title: String {
             switch self {
             case .classic:
@@ -222,12 +178,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
     }
-
     private enum BallOwner {
         case player
         case enemy
     }
-
     private enum PhysicsCategory {
         static let ball: UInt32 = 1 << 0
         static let paddle: UInt32 = 1 << 1
@@ -235,7 +189,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         static let obstacle: UInt32 = 1 << 3
         static let fieldObject: UInt32 = 1 << 4
     }
-
     private enum NodeName {
         static let playButton = "playButton"
         static let settingsButton = "settingsButton"
@@ -257,31 +210,25 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         static let notificationsLeft = "notificationsLeft"
         static let notificationsRight = "notificationsRight"
     }
-
     private var paddleSize: CGSize {
         let width = isLandscapeLayout
             ? min(max(safeFrame.width * 0.24, 150), 230)
             : min(max(safeFrame.width * 0.36, 128), 160)
         return CGSize(width: width, height: isLandscapeLayout ? 16 : 18)
     }
-
     private var enemyPaddleSize: CGSize {
         let playerSize = paddleSize
         return CGSize(width: playerSize.width * 0.86, height: max(playerSize.height - 2, 14))
     }
-
     private var ballRadius: CGFloat {
         isLandscapeLayout ? 13 : 16
     }
-
     private var paddleBottomOffset: CGFloat {
         isLandscapeLayout ? min(max(safeFrame.height * 0.13, 38), 56) : 72
     }
-
     private var enemyPaddleTopOffset: CGFloat {
         paddleBottomOffset
     }
-
     private let difficultyInterval = 10
     private let backgroundChangeInterval = 5
     private let obstacleInterval = 15
@@ -313,7 +260,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var profileCardHandles: GameSettingsProfileCard.Handles?
     private var profilePhotoCoordinator: PlayerProfilePhotoPickerCoordinator?
     private var overlayNode: SKNode?
-
     private var settingsScrollRoot: SKNode?
     private var settingsScrollCrop: SKCropNode?
     private var settingsScrollY: CGFloat = 0
@@ -323,7 +269,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var settingsPanBegan: CGPoint?
     private var settingsLastTouchY: CGFloat = 0
     private var settingsDragActive = false
-
     private var leaderboardScrollRoot: SKNode?
     private var leaderboardScrollCrop: SKCropNode?
     private var leaderboardScrollY: CGFloat = 0
@@ -358,13 +303,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var gameState: GameState = .start
     private var hasPresentedInitialLayout = false
     private var lastLayoutSafeFrame: CGRect = .zero
-
     private let backgroundColors: [UIColor] = [
         UIColor(red: 0.071, green: 0.071, blue: 0.071, alpha: 1),
         UIColor(red: 0.055, green: 0.075, blue: 0.085, alpha: 1),
         UIColor(red: 0.085, green: 0.055, blue: 0.078, alpha: 1)
     ]
-
     override func didMove(to view: SKView) {
         backgroundColor = baseBackgroundColor
         physicsWorld.gravity = .zero
@@ -373,24 +316,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         loadSettings()
         showStartScreen()
     }
-
     override func didChangeSize(_ oldSize: CGSize) {
         super.didChangeSize(oldSize)
-
         guard view != nil else { return }
-
         if !hasPresentedInitialLayout {
             hasPresentedInitialLayout = true
             lastLayoutSafeFrame = safeFrame
             return
         }
-
         relayoutSceneForCurrentSize()
     }
-
     private var safeFrame: CGRect {
         guard let view else { return frame }
-
         let insets = view.safeAreaInsets
         return CGRect(
             x: frame.minX + insets.left,
@@ -399,22 +336,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             height: frame.height - insets.top - insets.bottom
         )
     }
-
     private var isLandscapeLayout: Bool {
         safeFrame.width > safeFrame.height
     }
-
     private var titleFontSize: CGFloat {
         isLandscapeLayout ? min(max(safeFrame.height * 0.12, 34), 44) : 44
     }
-
     private var scoreboardFontSize: CGFloat {
         isLandscapeLayout ? min(max(safeFrame.height * 0.22, 70), 92) : 124
     }
-
     private func relayoutSceneForCurrentSize() {
         let previousSafeFrame = lastLayoutSafeFrame == .zero ? safeFrame : lastLayoutSafeFrame
-
         switch gameState {
         case .start:
             showStartScreen()
@@ -434,10 +366,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             rebuildPlayingSceneForCurrentLayout(previousSafeFrame: previousSafeFrame, velocityOverride: .zero)
             showMatchOver(winner: winner)
         }
-
         lastLayoutSafeFrame = safeFrame
     }
-
     private func rebuildPlayingSceneForCurrentLayout(
         previousSafeFrame: CGRect,
         velocityOverride: CGVector? = nil
@@ -460,12 +390,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let savedVelocity = velocityOverride ?? ball?.physicsBody?.velocity ?? .zero
         let defaultBallPosition = CGPoint(x: safeFrame.midX, y: safeFrame.midY)
         let normalizedBallPosition = normalizedPoint(ball?.position ?? defaultBallPosition, in: previousSafeFrame)
-
         removeAllChildren()
         clearGameReferences()
         physicsWorld.speed = 1
         gameState = .playing
-
         playerScore = savedPlayerScore
         enemyScore = savedEnemyScore
         currentScore = savedCurrentScore
@@ -479,7 +407,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         enemyHasShield = savedEnemyHasShield
         playerIsDebuffed = savedPlayerIsDebuffed
         enemyIsDebuffed = savedEnemyIsDebuffed
-
         createWorldNode()
         setupBackground()
         createScreenBoundaries()
@@ -488,13 +415,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         createBall()
         createScoreLabel()
         createPauseButton()
-
         ball?.position = clampedBallPosition(point(from: normalizedBallPosition, in: safeFrame))
         ball?.lastTouchedBy = savedBallTouchedBy
         setBallOwnerColor(savedBallTouchedBy == "AI" ? .enemy : .player)
         updatePaddleScale(for: .player)
         updatePaddleScale(for: .enemy)
-
         if wasCountingDown {
             startCountdown { [weak self] in
                 self?.launchBall(with: self?.makeRandomStartVelocity() ?? .zero)
@@ -508,36 +433,30 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             schedulePowerUpsIfNeeded(delay: 1.0)
         }
     }
-
     private func normalizedPoint(_ point: CGPoint, in rect: CGRect) -> CGPoint {
         guard rect.width > 0, rect.height > 0 else {
             return CGPoint(x: 0.5, y: 0.5)
         }
-
         return CGPoint(
             x: min(max((point.x - rect.minX) / rect.width, 0), 1),
             y: min(max((point.y - rect.minY) / rect.height, 0), 1)
         )
     }
-
     private func point(from normalizedPoint: CGPoint, in rect: CGRect) -> CGPoint {
         CGPoint(
             x: rect.minX + rect.width * normalizedPoint.x,
             y: rect.minY + rect.height * normalizedPoint.y
         )
     }
-
     private func clampedBallPosition(_ position: CGPoint) -> CGPoint {
         CGPoint(
             x: min(max(position.x, safeFrame.minX + ballRadius), safeFrame.maxX - ballRadius),
             y: min(max(position.y, safeFrame.minY + ballRadius), safeFrame.maxY - ballRadius)
         )
     }
-
     private func isZeroVelocity(_ velocity: CGVector) -> Bool {
         abs(velocity.dx) < 0.001 && abs(velocity.dy) < 0.001
     }
-
     private func showStartScreen() {
         isPaused = false
         removeAllChildren()
@@ -548,26 +467,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         createWorldNode()
         setupBackground()
         createBlurredBackdrop(zPosition: 60)
-
         let safeFrame = self.safeFrame
         let menuOverlay = SKNode()
         menuOverlay.zPosition = 90
         menuOverlay.alpha = 0
         addChild(menuOverlay)
         overlayNode = menuOverlay
-
         let titleLabel = makeLabel(text: "GLOW BOUNCE", size: titleFontSize, weight: .bold)
         titleLabel.alpha = 0.94
         titleLabel.position = CGPoint(x: safeFrame.midX, y: safeFrame.midY + min(72, safeFrame.height * 0.18))
         menuOverlay.addChild(titleLabel)
-
         let playButton = makeButton(title: "START", name: NodeName.playButton)
         playButton.position = CGPoint(
             x: safeFrame.midX,
             y: safeFrame.midY - (isLandscapeLayout ? min(18, safeFrame.height * 0.06) : 34)
         )
         menuOverlay.addChild(playButton)
-
         let settingsButton = makeButton(title: "SETTINGS", name: NodeName.settingsButton)
         settingsButton.setScale(0.84)
         settingsButton.alpha = 0.84
@@ -576,12 +491,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             y: playButton.position.y - (isLandscapeLayout ? 56 : 70)
         )
         menuOverlay.addChild(settingsButton)
-
         menuOverlay.run(.fadeIn(withDuration: 0.3))
         hasPresentedInitialLayout = true
         lastLayoutSafeFrame = safeFrame
     }
-
     private func makeVerticalScrollChrome(
         in overlay: SKNode,
         safeFrame: CGRect,
@@ -595,22 +508,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let maskW = max(80, safeFrame.width - 24)
         let maskH = max(100, visibleH - 12)
         let halfH = maskH * 0.5
-
         let mask = SKShapeNode(rectOf: CGSize(width: maskW, height: maskH), cornerRadius: 12)
         mask.fillColor = .white
-
         let crop = SKCropNode()
         crop.maskNode = mask
         crop.position = CGPoint(x: safeFrame.midX, y: visibleMidY)
         crop.zPosition = 0
-
         let scrollRoot = SKNode()
         scrollRoot.zPosition = 1
         crop.addChild(scrollRoot)
         overlay.addChild(crop)
         return (crop, scrollRoot, visibleMidY, halfH)
     }
-
     private func finalizeVerticalScroll(scrollRoot: SKNode, halfHeight: CGFloat) -> (y: CGFloat, minY: CGFloat, maxY: CGFloat) {
         scrollRoot.position.y = 0
         let rect = scrollRoot.calculateAccumulatedFrame()
@@ -631,22 +540,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         scrollRoot.position.y = clamped
         return (clamped, lo, hi)
     }
-
     private func applySettingsScroll(deltaY: CGFloat) {
         guard let root = settingsScrollRoot else { return }
         guard settingsScrollMaxY - settingsScrollMinY > 1 else { return }
         settingsScrollY = min(max(settingsScrollY + deltaY, settingsScrollMinY), settingsScrollMaxY)
         root.position.y = settingsScrollY
     }
-
     private func applyLeaderboardScroll(deltaY: CGFloat) {
         guard let root = leaderboardScrollRoot else { return }
         guard leaderboardScrollMaxY - leaderboardScrollMinY > 1 else { return }
         leaderboardScrollY = min(max(leaderboardScrollY + deltaY, leaderboardScrollMinY), leaderboardScrollMaxY)
         root.position.y = leaderboardScrollY
     }
-
-    /// Пикеры, блок профиля и кнопка лидерборда — единая вертикальная раскладка (портрет и ландшафт).
     @discardableResult
     private func layoutSettingsScrollBody(
         in scrollRoot: SKNode,
@@ -659,9 +564,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let leaderHalf = leaderHeight * 0.5
         let plateHalf = GameSettingsProfileCard.Metrics.plateHalfHeight(isPortrait: !isLandscapeLayout)
         let profileCaptionSize: CGFloat = isLandscapeLayout ? 11 : 12
-
         var valueY = contentTop - (isLandscapeLayout ? 40 : 54)
-
         createSettingsPicker(
             title: "Difficulty",
             value: selectedDifficulty.title,
@@ -674,7 +577,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             self?.difficultyValueLabel = label
         }
         valueY -= pickerRowSpacing
-
         createSettingsPicker(
             title: "Mode",
             value: selectedGameMode.title,
@@ -687,7 +589,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             self?.gameModeValueLabel = label
         }
         valueY -= pickerRowSpacing
-
         createSettingsPicker(
             title: "Notifications",
             value: GameNotificationPreferenceStore.notificationsPickerTitle(isEnabled: notificationsEnabled),
@@ -700,13 +601,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             self?.notificationsValueLabel = label
         }
         valueY -= pickerRowSpacing + (isLandscapeLayout ? 18 : 22)
-
         let profileCaption = makeLabel(text: "PROFILE", size: profileCaptionSize, weight: .semibold)
         profileCaption.alpha = GameMenuAppearance.pickerSectionTitleAlpha
         profileCaption.position = CGPoint(x: 0, y: valueY - layoutMidY)
         scrollRoot.addChild(profileCaption)
         valueY -= isLandscapeLayout ? 14 : 16
-
         let profileCenterY = valueY - plateHalf
         profileCardHandles = GameSettingsProfileCard.attach(
             to: scrollRoot,
@@ -715,7 +614,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 : .portrait(cardCenter: CGPoint(x: 0, y: profileCenterY - layoutMidY), cardWidth: rowWidth)
         )
         valueY = profileCenterY - plateHalf - (isLandscapeLayout ? 22 : 26)
-
         let leaderboardCenterY = valueY - leaderHalf
         let leaderboardButton = makeButton(
             title: "LEADERBOARD",
@@ -728,7 +626,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         scrollRoot.addChild(leaderboardButton)
         return leaderboardCenterY - leaderHalf
     }
-
     private func showSettingsScreen() {
         isPaused = false
         removeAllChildren()
@@ -739,18 +636,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         createWorldNode()
         setupBackground()
         createBlurredBackdrop(zPosition: 60)
-
         let safeFrame = self.safeFrame
         let settingsOverlay = SKNode()
         settingsOverlay.zPosition = 90
         settingsOverlay.alpha = 0
         addChild(settingsOverlay)
         overlayNode = settingsOverlay
-
         let titleLabel = makeLabel(text: "SETTINGS", size: isLandscapeLayout ? 34 : 40, weight: .bold)
         titleLabel.alpha = 0.94
         titleLabel.zPosition = 2
-
         let laneWidth = min(safeFrame.width - 48, 520)
         let cardWidth = min(safeFrame.width - 32, 360)
         let legalRowH: CGFloat = isLandscapeLayout ? 44 : 46
@@ -758,14 +652,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let backHeight: CGFloat = isLandscapeLayout ? 48 : 50
         let backButtonHalfH = backHeight * 0.5
         let pairGap: CGFloat = 12
-
         let backY: CGFloat
         let legalY: CGFloat
         let pairW: CGFloat
-
         if isLandscapeLayout {
             titleLabel.position = CGPoint(x: safeFrame.midX, y: safeFrame.midY + 104)
-            // legalY / backY unused in landscape — buttons go into scroll
             legalY = 0
             backY = 0
             pairW = (laneWidth - pairGap) * 0.5
@@ -775,11 +666,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             legalY = backY + 56
             pairW = (cardWidth - pairGap) * 0.5
         }
-
         settingsOverlay.addChild(titleLabel)
-
         let contentTop = titleLabel.position.y - (isLandscapeLayout ? 18 : 22)
-        // In landscape all buttons go inside scroll — extend viewport to screen bottom.
         let contentBottom: CGFloat = isLandscapeLayout
             ? safeFrame.minY + 16
             : legalY + legalRowH * 0.5 + 12
@@ -794,7 +682,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         settingsScrollCrop = scrollChrome.crop
         settingsScrollRoot = scrollRoot
         settingsVisibleHalfHeight = scrollChrome.halfHeight
-
         let rowWidth: CGFloat = isLandscapeLayout ? laneWidth : cardWidth
         let scrollBodyBottom = layoutSettingsScrollBody(
             in: scrollRoot,
@@ -803,8 +690,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             rowWidth: rowWidth,
             leaderHeight: leaderHeight
         )
-
-        // Support button — always inside scroll, both orientations
         let supportH: CGFloat = isLandscapeLayout ? leaderHeight : leaderHeight
         let supportGap: CGFloat = isLandscapeLayout ? 16 : 20
         let supportCenterY = scrollBodyBottom - supportH * 0.5 - supportGap
@@ -817,9 +702,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         supportButton.alpha = 0.92
         supportButton.position = CGPoint(x: 0, y: supportCenterY - layoutMidY)
         scrollRoot.addChild(supportButton)
-
         if isLandscapeLayout {
-            // In landscape: privacy, terms, back are all inside scroll so they're always reachable
             let afterSupport = supportCenterY - supportH * 0.5
             let legalGap: CGFloat = 16
             let legalCenterY = afterSupport - legalGap - legalRowH * 0.5
@@ -831,7 +714,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             )
             privacyButton.position = CGPoint(x: -pairGap * 0.5 - pairW * 0.5, y: legalCenterY - layoutMidY)
             scrollRoot.addChild(privacyButton)
-
             let termsButton = makeButton(
                 title: "TERMS",
                 name: NodeName.termsButton,
@@ -840,7 +722,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             )
             termsButton.position = CGPoint(x: pairGap * 0.5 + pairW * 0.5, y: legalCenterY - layoutMidY)
             scrollRoot.addChild(termsButton)
-
             let backGap: CGFloat = 12
             let backCenterY = legalCenterY - legalRowH * 0.5 - backGap - backHeight * 0.5
             let backButton = makeButton(
@@ -861,7 +742,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             )
             privacyButton.position = CGPoint(x: safeFrame.midX - pairGap * 0.5 - pairW * 0.5, y: legalY)
             settingsOverlay.addChild(privacyButton)
-
             let termsButton = makeButton(
                 title: "TERMS",
                 name: NodeName.termsButton,
@@ -870,7 +750,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             )
             termsButton.position = CGPoint(x: safeFrame.midX + pairGap * 0.5 + pairW * 0.5, y: legalY)
             settingsOverlay.addChild(termsButton)
-
             let backButton = makeButton(
                 title: "BACK",
                 name: NodeName.backButton,
@@ -881,17 +760,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             backButton.position = CGPoint(x: safeFrame.midX, y: backY)
             settingsOverlay.addChild(backButton)
         }
-
         let scrollLimits = finalizeVerticalScroll(scrollRoot: scrollRoot, halfHeight: settingsVisibleHalfHeight)
         settingsScrollY = scrollLimits.y
         settingsScrollMinY = scrollLimits.minY
         settingsScrollMaxY = scrollLimits.maxY
-
         settingsOverlay.run(.fadeIn(withDuration: 0.3))
         hasPresentedInitialLayout = true
         lastLayoutSafeFrame = safeFrame
     }
-
     private func showLeaderboardScreen() {
         isPaused = false
         removeAllChildren()
@@ -902,27 +778,23 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         createWorldNode()
         setupBackground()
         createBlurredBackdrop(zPosition: 60)
-
         let safeFrame = self.safeFrame
         let overlay = SKNode()
         overlay.zPosition = 90
         overlay.alpha = 0
         addChild(overlay)
         overlayNode = overlay
-
         let title = makeLabel(text: "LEADERBOARD", size: isLandscapeLayout ? 30 : 34, weight: .bold)
         title.alpha = 0.94
         title.zPosition = 2
         title.position = CGPoint(x: safeFrame.midX, y: safeFrame.maxY - (isLandscapeLayout ? 36 : 42))
         overlay.addChild(title)
-
         let backY = safeFrame.minY + (isLandscapeLayout ? 44 : 52)
         let backButton = makeButton(title: "BACK", name: NodeName.backButton)
         backButton.setScale(0.78)
         backButton.alpha = 0.84
         backButton.position = CGPoint(x: safeFrame.midX, y: backY)
         backButton.zPosition = 3
-
         let contentTop = title.position.y - 18
         let contentBottom = backY + 34
         let lbChrome = makeVerticalScrollChrome(
@@ -936,7 +808,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         leaderboardScrollRoot = lbRoot
         leaderboardVisibleHalfHeight = lbChrome.halfHeight
         let lm = lbChrome.visibleMidY
-
         var y = safeFrame.maxY - (isLandscapeLayout ? 86 : 98)
         let summaryLines = [
             "TOTAL POINTS: \(LocalLeaderboardStore.totalPoints)",
@@ -951,7 +822,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             lbRoot.addChild(lab)
             y -= isLandscapeLayout ? 24 : 26
         }
-
         y -= 10
         let sub = makeLabel(text: "RECENT (DATE · DIFF/MODE · RESULT · PTS)", size: 11, weight: .semibold)
         sub.alpha = GameMenuAppearance.pickerSectionTitleAlpha
@@ -959,7 +829,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         sub.position = CGPoint(x: 0, y: y - lm)
         lbRoot.addChild(sub)
         y -= 22
-
         let rows = LocalLeaderboardStore.matchTableRows(limit: 12)
         if rows.isEmpty {
             let empty = makeLabel(text: "No matches yet — win a game!", size: 14, weight: .medium)
@@ -977,19 +846,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 y -= isLandscapeLayout ? 18 : 20
             }
         }
-
         let lbLimits = finalizeVerticalScroll(scrollRoot: lbRoot, halfHeight: leaderboardVisibleHalfHeight)
         leaderboardScrollY = lbLimits.y
         leaderboardScrollMinY = lbLimits.minY
         leaderboardScrollMaxY = lbLimits.maxY
-
         overlay.addChild(backButton)
-
         overlay.run(.fadeIn(withDuration: 0.25))
         hasPresentedInitialLayout = true
         lastLayoutSafeFrame = safeFrame
     }
-
     private func clearGameReferences() {
         backgroundNode = nil
         backgroundPulseNode = nil
@@ -1032,36 +897,29 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         removeAction(forKey: "enemyDebuffRecovery")
         removeAction(forKey: "fieldObjectSpawnDelay")
     }
-
     private func loadSettings() {
         let defaults = UserDefaults.standard
-
         if defaults.object(forKey: SettingsKey.difficulty) == nil {
             selectedDifficulty = .normal
         } else if let difficulty = AIDifficulty(rawValue: defaults.integer(forKey: SettingsKey.difficulty)) {
             selectedDifficulty = difficulty
         }
-
         if defaults.object(forKey: SettingsKey.gameMode) == nil {
             selectedGameMode = .powerUps
         } else if let gameMode = GameMode(rawValue: defaults.integer(forKey: SettingsKey.gameMode)) {
             selectedGameMode = gameMode
         }
-
         notificationsEnabled = GameNotificationPreferenceStore.isUserRemoteNotificationsEnabled
     }
-
     private func saveSettings() {
         let defaults = UserDefaults.standard
         defaults.set(selectedDifficulty.rawValue, forKey: SettingsKey.difficulty)
         defaults.set(selectedGameMode.rawValue, forKey: SettingsKey.gameMode)
     }
-
     private enum SettingsKey {
         static let difficulty = "selectedDifficulty"
         static let gameMode = "selectedGameMode"
     }
-
     private func createWorldNode() {
         let worldNode = SKNode()
         worldNode.name = "worldNode"
@@ -1069,7 +927,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         addChild(worldNode)
         self.worldNode = worldNode
     }
-
     private func addWorldChild(_ node: SKNode) {
         if let worldNode {
             worldNode.addChild(node)
@@ -1077,7 +934,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             addChild(node)
         }
     }
-
     private func createPicker(
         title: String,
         value: String,
@@ -1091,23 +947,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         titleLabel.alpha = GameMenuAppearance.pickerSectionTitleAlpha
         titleLabel.position = CGPoint(x: safeFrame.midX, y: y + 28)
         addChild(titleLabel)
-
         let leftArrow = makeLabel(text: "<", size: 30, weight: .semibold)
         leftArrow.name = leftName
         leftArrow.position = CGPoint(x: safeFrame.midX - 112, y: y - 2)
         addChild(leftArrow)
-
         let valueLabel = makeLabel(text: value, size: 28, weight: .medium)
         valueLabel.position = CGPoint(x: safeFrame.midX, y: y)
         addChild(valueLabel)
         valueHandler(valueLabel)
-
         let rightArrow = makeLabel(text: ">", size: 30, weight: .semibold)
         rightArrow.name = rightName
         rightArrow.position = CGPoint(x: safeFrame.midX + 112, y: y - 2)
         addChild(rightArrow)
     }
-
     private func createSettingsPicker(
         title: String,
         value: String,
@@ -1124,7 +976,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             guard let lm = layoutMidY else { return sceneY }
             return sceneY - lm
         }
-
         let titleLabel = makeLabel(
             text: title.uppercased(),
             size: GameMenuAppearance.pickerTitleSize(isLandscape: isLandscapeLayout),
@@ -1133,14 +984,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         titleLabel.alpha = GameMenuAppearance.pickerSectionTitleAlpha
         titleLabel.position = CGPoint(x: baseX, y: ty(y + (isLandscapeLayout ? 23 : 28)))
         parent.addChild(titleLabel)
-
         let arrowOffset = isLandscapeLayout ? min(safeFrame.width * 0.14, 124) : 112
         let arrowSize = GameMenuAppearance.pickerArrowSize(isLandscape: isLandscapeLayout)
         let leftArrow = makeLabel(text: "<", size: arrowSize, weight: .semibold)
         leftArrow.name = leftName
         leftArrow.position = CGPoint(x: baseX - arrowOffset, y: ty(y - 2))
         parent.addChild(leftArrow)
-
         let valueLabel = makeLabel(
             text: value,
             size: GameMenuAppearance.pickerValueSize(isLandscape: isLandscapeLayout),
@@ -1149,25 +998,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         valueLabel.position = CGPoint(x: baseX, y: ty(y))
         parent.addChild(valueLabel)
         valueHandler(valueLabel)
-
         let rightArrow = makeLabel(text: ">", size: arrowSize, weight: .semibold)
         rightArrow.name = rightName
         rightArrow.position = CGPoint(x: baseX + arrowOffset, y: ty(y - 2))
         parent.addChild(rightArrow)
     }
-
     private func setupBackground() {
         let backgroundNode = SKSpriteNode(color: backgroundColors[0], size: size)
         backgroundNode.position = CGPoint(x: frame.midX, y: frame.midY)
         backgroundNode.zPosition = -100
         addWorldChild(backgroundNode)
-
         self.backgroundNode = backgroundNode
-
         createSpaceBackground()
         createGrid()
         createParticleStars()
-
         let pulseNode = SKSpriteNode(color: .clear, size: size)
         pulseNode.position = CGPoint(x: frame.midX, y: frame.midY)
         pulseNode.alpha = 0
@@ -1175,7 +1019,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         pulseNode.blendMode = .add
         addWorldChild(pulseNode)
         backgroundPulseNode = pulseNode
-
         let topGlow = makeGlow(
             radius: size.width * 0.8,
             color: playerColor,
@@ -1183,7 +1026,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         )
         topGlow.position = CGPoint(x: frame.midX, y: frame.maxY + size.width * 0.25)
         addWorldChild(topGlow)
-
         let bottomGlow = makeGlow(
             radius: size.width * 0.65,
             color: enemyColor,
@@ -1191,9 +1033,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         )
         bottomGlow.position = CGPoint(x: frame.midX, y: frame.minY - size.width * 0.28)
         addWorldChild(bottomGlow)
-
     }
-
     private func createSpaceBackground() {
         let texture = SKTexture(imageNamed: "bgSpace")
         let spaceBackground = SKSpriteNode(texture: texture)
@@ -1201,7 +1041,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         spaceBackground.alpha = 0.56
         spaceBackground.position = .zero
         spaceBackground.size = aspectFillSize(for: texture.size(), in: size)
-
         let blurNode = SKEffectNode()
         blurNode.zPosition = -99
         blurNode.position = CGPoint(x: frame.midX, y: frame.midY)
@@ -1209,38 +1048,31 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         blurNode.shouldRasterize = true
         blurNode.addChild(spaceBackground)
         addWorldChild(blurNode)
-
         blurNode.run(.repeatForever(.sequence([
             .scale(to: 1.05, duration: 60),
             .scale(to: 1.0, duration: 60)
         ])), withKey: "spacePulse")
     }
-
     private func aspectFillSize(for textureSize: CGSize, in targetSize: CGSize) -> CGSize {
         guard textureSize.width > 0, textureSize.height > 0 else { return targetSize }
-
         let scale = max(targetSize.width / textureSize.width, targetSize.height / textureSize.height)
         return CGSize(width: textureSize.width * scale, height: textureSize.height * scale)
     }
-
     private func createGrid() {
         let spacing: CGFloat = 36
         let gridPath = CGMutablePath()
         var x = frame.minX
-
         while x <= frame.maxX {
             gridPath.move(to: CGPoint(x: x, y: frame.minY))
             gridPath.addLine(to: CGPoint(x: x, y: frame.maxY))
             x += spacing
         }
-
         var y = frame.minY
         while y <= frame.maxY {
             gridPath.move(to: CGPoint(x: frame.minX, y: y))
             gridPath.addLine(to: CGPoint(x: frame.maxX, y: y))
             y += spacing
         }
-
         let grid = SKShapeNode(path: gridPath)
         grid.strokeColor = UIColor(white: 0.22, alpha: 1)
         grid.lineWidth = 0.7
@@ -1248,7 +1080,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         grid.zPosition = -96
         addWorldChild(grid)
     }
-
     private func createParticleStars() {
         let stars = SKEmitterNode()
         stars.position = CGPoint(x: frame.midX, y: frame.minY - 20)
@@ -1271,7 +1102,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         stars.zPosition = -94
         addWorldChild(stars)
     }
-
     private func pulseBackground(with color: UIColor) {
         backgroundPulseNode?.removeAction(forKey: "impactPulse")
         backgroundPulseNode?.color = color
@@ -1282,7 +1112,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             .fadeOut(withDuration: 0.22)
         ]), withKey: "impactPulse")
     }
-
     private func makeGlow(radius: CGFloat, color: UIColor, alpha: CGFloat) -> SKShapeNode {
         let glow = SKShapeNode(circleOfRadius: radius)
         glow.fillColor = color
@@ -1292,11 +1121,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         glow.blendMode = .add
         return glow
     }
-
     private func makeLabel(text: String, size: CGFloat, weight: UIFont.Weight) -> SKLabelNode {
         GameMenuAppearance.label(text: text, size: size, weight: weight)
     }
-
     private func makeScoreboardLabel(text: String, size: CGFloat) -> SKLabelNode {
         let font = UIFont.monospacedDigitSystemFont(ofSize: size, weight: .black)
         let label = SKLabelNode(fontNamed: font.fontName)
@@ -1307,7 +1134,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         label.verticalAlignmentMode = .center
         return label
     }
-
     private func makeButton(
         title: String,
         name: String,
@@ -1318,22 +1144,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let ts = titleSize ?? GameMenuAppearance.defaultButtonTitleSize
         return GameMenuAppearance.outlinePillButton(title: title, name: name, buttonSize: size, titleSize: ts)
     }
-
     private func buttonNode(from node: SKNode, named name: String) -> SKNode? {
         var currentNode: SKNode? = node
         var matchedNode: SKNode?
-
         while let node = currentNode {
             if node.name == name {
                 matchedNode = node
             }
-
             currentNode = node.parent
         }
-
         return matchedNode
     }
-
     private func analyticsScreenName() -> String {
         switch gameState {
         case .start: return "start"
@@ -1344,24 +1165,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         case .gameOver: return "game_over"
         }
     }
-
     private func analyticsOrientation() -> [String: Any] {
         ["orientation": isLandscapeLayout ? "landscape" : "portrait"]
     }
-
     private func animateButtonPress(_ button: SKNode?, completion: @escaping () -> Void) {
         guard let button else {
             completion()
             return
         }
-
         if let name = button.name {
             AppLogger.track(AppLogger.Event.buttonTap, properties: [
                 "button": name,
                 "screen": analyticsScreenName()
             ].merging(analyticsOrientation()) { _, new in new })
         }
-
         isPaused = false
         let originalScale = button.xScale
         button.removeAction(forKey: "buttonPress")
@@ -1371,15 +1188,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             .run(completion)
         ]), withKey: "buttonPress")
     }
-
     private func fadeOutActiveOverlay(completion: @escaping () -> Void) {
         let nodes = [overlayNode, childNode(withName: "blurredBackdrop")].compactMap { $0 }
-
         guard !nodes.isEmpty else {
             completion()
             return
         }
-
         nodes.forEach { $0.run(.fadeOut(withDuration: 0.3)) }
         run(.sequence([
             .wait(forDuration: 0.3),
@@ -1390,7 +1204,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         ]))
     }
-
     private func startGame() {
         removeAllChildren()
         clearGameReferences()
@@ -1412,11 +1225,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             "difficulty": selectedDifficulty.title,
             "game_mode": selectedGameMode.title
         ].merging(analyticsOrientation()) { _, new in new })
-
         lightImpactFeedback.prepare()
         heavyImpactFeedback.prepare()
         prepareReusableAssets()
-
         createWorldNode()
         setupBackground()
         createScreenBoundaries()
@@ -1430,7 +1241,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             self?.schedulePowerUpsIfNeeded()
         }
     }
-
     private func prepareReusableAssets() {
         _ = particleTexture
         _ = trailTexture
@@ -1438,7 +1248,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         _ = starTexture
         SoundManager.shared.preloadSounds()
     }
-
     private func createPauseButton() {
         let safeFrame = self.safeFrame
         let pauseButton = SKLabelNode(text: "⏸")
@@ -1453,7 +1262,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         pauseButton.zPosition = 65
         addChild(pauseButton)
     }
-
     private func createScreenBoundaries() {
         let playArea = safeFrame.insetBy(dx: ballRadius, dy: 8)
         addBoundary(
@@ -1465,7 +1273,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             to: CGPoint(x: playArea.maxX, y: playArea.maxY)
         )
     }
-
     private func addBoundary(from startPoint: CGPoint, to endPoint: CGPoint) {
         let boundary = SKNode()
         boundary.physicsBody = SKPhysicsBody(edgeFrom: startPoint, to: endPoint)
@@ -1474,7 +1281,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         boundary.physicsBody?.contactTestBitMask = PhysicsCategory.ball
         addWorldChild(boundary)
     }
-
     private func createPaddle() {
         let safeFrame = self.safeFrame
         let paddle = SKShapeNode(rectOf: paddleSize, cornerRadius: paddleSize.height / 2)
@@ -1486,7 +1292,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         paddle.physicsBody?.categoryBitMask = PhysicsCategory.paddle
         paddle.physicsBody?.collisionBitMask = PhysicsCategory.ball
         addWorldChild(paddle)
-
         let paddleGlow = SKShapeNode(rectOf: CGSize(width: paddleSize.width + 18, height: paddleSize.height + 12), cornerRadius: 15)
         paddleGlow.fillColor = playerColor
         paddleGlow.strokeColor = .clear
@@ -1494,12 +1299,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         paddleGlow.blendMode = .add
         paddleGlow.zPosition = -1
         paddle.addChild(paddleGlow)
-
         self.paddle = paddle
         lastPaddleX = paddle.position.x
         targetPaddleX = paddle.position.x
     }
-
     private func createEnemyPaddle() {
         let safeFrame = self.safeFrame
         let enemyPaddle = SKShapeNode(rectOf: enemyPaddleSize, cornerRadius: enemyPaddleSize.height / 2)
@@ -1512,7 +1315,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         enemyPaddle.physicsBody?.categoryBitMask = PhysicsCategory.paddle
         enemyPaddle.physicsBody?.collisionBitMask = PhysicsCategory.ball
         addWorldChild(enemyPaddle)
-
         let enemyGlow = SKShapeNode(rectOf: CGSize(width: enemyPaddleSize.width + 16, height: enemyPaddleSize.height + 10), cornerRadius: 13)
         enemyGlow.fillColor = enemyColor
         enemyGlow.strokeColor = .clear
@@ -1520,10 +1322,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         enemyGlow.blendMode = .add
         enemyGlow.zPosition = -1
         enemyPaddle.addChild(enemyGlow)
-
         self.enemyPaddle = enemyPaddle
     }
-
     private func createBall() {
         let safeFrame = self.safeFrame
         let ball = Ball(radius: ballRadius)
@@ -1541,7 +1341,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         ball.physicsBody?.collisionBitMask = PhysicsCategory.paddle | PhysicsCategory.boundary | PhysicsCategory.obstacle
         ball.physicsBody?.contactTestBitMask = PhysicsCategory.paddle | PhysicsCategory.boundary | PhysicsCategory.obstacle | PhysicsCategory.fieldObject
         addWorldChild(ball)
-
         let ballGlow = SKShapeNode(circleOfRadius: ballRadius * 2)
         ballGlow.fillColor = playerColor
         ballGlow.strokeColor = .clear
@@ -1550,20 +1349,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         ballGlow.zPosition = -1
         ballGlow.name = "ballGlow"
         ball.addChild(ballGlow)
-
         let trail = makeBallTrail()
         ball.addChild(trail)
         ballTrail = trail
-
         self.ball = ball
         ball.lastTouchedBy = "Player"
         setBallOwnerColor(.player)
         ball.physicsBody?.velocity = .zero
     }
-
     private func spawnFieldObjectsForRound() {
         clearFieldObjects()
-
         let objectCount = 1
         let zone = CGRect(
             x: safeFrame.minX + 52,
@@ -1571,9 +1366,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             width: safeFrame.width - 104,
             height: safeFrame.height * 0.36
         )
-
         guard zone.width > 0, zone.height > 0 else { return }
-
         for _ in 0..<objectCount {
             let type = [FieldObject.ObjectType.buff, .hazard].randomElement() ?? .buff
             let sides = Bool.random() ? 6 : 8
@@ -1590,12 +1383,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             object.physicsBody?.collisionBitMask = 0
             object.physicsBody?.contactTestBitMask = PhysicsCategory.ball
             object.startAliveAnimation()
-
             addWorldChild(object)
             fieldObjects.append(object)
         }
     }
-
     private func scheduleFieldObjectsForRound(delay: TimeInterval = 2.0) {
         clearFieldObjects()
         removeAction(forKey: "fieldObjectSpawnDelay")
@@ -1607,76 +1398,62 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         ]), withKey: "fieldObjectSpawnDelay")
     }
-
     private func schedulePowerUpsIfNeeded(delay: TimeInterval = 2.0) {
         guard selectedGameMode == .powerUps else {
             clearFieldObjects()
             removeAction(forKey: "fieldObjectSpawnDelay")
             return
         }
-
         scheduleFieldObjectsForRound(delay: delay)
     }
-
     private func randomFieldObjectPosition(in zone: CGRect, radius: CGFloat) -> CGPoint {
         let centerPoint = CGPoint(x: safeFrame.midX, y: safeFrame.midY)
-
         for _ in 0..<16 {
             let position = CGPoint(
                 x: CGFloat.random(in: zone.minX...zone.maxX),
                 y: CGFloat.random(in: zone.minY...zone.maxY)
             )
-
             let isAwayFromBallSpawn = hypot(position.x - centerPoint.x, position.y - centerPoint.y) > ballRadius + radius + 34
             let isAwayFromOtherObjects = fieldObjects.allSatisfy {
                 hypot(position.x - $0.position.x, position.y - $0.position.y) > radius + 42
             }
-
             if isAwayFromBallSpawn && isAwayFromOtherObjects {
                 return position
             }
         }
-
         return CGPoint(
             x: CGFloat.random(in: zone.minX...zone.maxX),
             y: CGFloat.random(in: zone.minY...zone.maxY)
         )
     }
-
     private func clearFieldObjects() {
         fieldObjects.forEach { $0.removeFromParent() }
         fieldObjects.removeAll()
     }
-
     private func makeRandomStartVelocity() -> CGVector {
         let speed: CGFloat = 330
         let angle = CGFloat.random(in: 35...145) * .pi / 180
         return CGVector(dx: cos(angle) * speed, dy: sin(angle) * speed)
     }
-
     private func launchBall(with velocity: CGVector) {
         physicsWorld.speed = 1
         ball?.physicsBody?.velocity = velocity
         ballTrail?.particleBirthRate = 70
         lastUpdateTime = 0
     }
-
     private func startCountdown(completion: @escaping () -> Void) {
         isCountingDown = true
         physicsWorld.speed = 0
         ball?.physicsBody?.velocity = .zero
         ballTrail?.particleBirthRate = 0
-
         let countdownOverlay = SKNode()
         countdownOverlay.name = "countdownOverlay"
         countdownOverlay.zPosition = 95
         countdownOverlay.alpha = 0
         addChild(countdownOverlay)
-
         let dim = SKSpriteNode(color: UIColor(white: 0, alpha: 0.38), size: size)
         dim.position = CGPoint(x: frame.midX, y: frame.midY)
         countdownOverlay.addChild(dim)
-
         let card = SKShapeNode(rectOf: CGSize(width: 190, height: 150), cornerRadius: 30)
         card.fillColor = UIColor(white: 0.02, alpha: 0.9)
         card.strokeColor = playerColor
@@ -1684,14 +1461,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         card.glowWidth = 8
         card.position = CGPoint(x: safeFrame.midX, y: safeFrame.midY)
         countdownOverlay.addChild(card)
-
         let countdownLabel = makeScoreboardLabel(text: "3", size: 82)
         countdownLabel.name = "countdownLabel"
         countdownLabel.fontColor = playerColor
         countdownLabel.alpha = 0
         countdownLabel.position = .zero
         card.addChild(countdownLabel)
-
         let steps = ["3", "2", "1", "GO!"]
         let actions = steps.flatMap { value in
             [
@@ -1711,7 +1486,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 ])
             ]
         }
-
         countdownOverlay.run(.fadeIn(withDuration: 0.18))
         countdownLabel.run(.sequence(actions + [
             .run {
@@ -1728,7 +1502,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         ]))
     }
-
     private func createScoreLabel() {
         let safeFrame = self.safeFrame
         let scoreboardLabel = makeScoreboardLabel(text: "", size: scoreboardFontSize)
@@ -1736,19 +1509,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         scoreboardLabel.zPosition = -30
         scoreboardLabel.position = CGPoint(x: safeFrame.midX, y: safeFrame.midY)
         addWorldChild(scoreboardLabel)
-
         self.scoreboardLabel = scoreboardLabel
         updateScoreLabel()
     }
-
     private func updateScoreLabel() {
         scoreboardLabel?.text = "\(playerScore):\(enemyScore)"
         scoreboardLabel?.fontColor = playerScore >= enemyScore ? playerColor : enemyColor
     }
-
     private func showMatchOver(winner: BallOwner) {
         guard gameState == .playing else { return }
-
         gameState = .gameOver
         AppLogger.track(AppLogger.Event.gameOver, properties: [
             "winner": winner == .player ? "player" : "enemy",
@@ -1762,10 +1531,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         ballTrail?.particleBirthRate = 0
         ball?.physicsBody?.velocity = .zero
         ball?.physicsBody?.angularVelocity = 0
-
         let safeFrame = self.safeFrame
         createBlurredBackdrop(zPosition: 70)
-
         let overlayHeight = isLandscapeLayout ? min(safeFrame.height - 28, 260) : 310
         let overlay = SKShapeNode(rectOf: CGSize(width: safeFrame.width - 36, height: overlayHeight), cornerRadius: 32)
         overlay.fillColor = UIColor(white: 0.02, alpha: 0.92)
@@ -1775,20 +1542,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         overlay.zPosition = 80
         overlayNode = overlay
         addChild(overlay)
-
         let title = winner == .player ? "YOU WIN" : "YOU LOSE"
         let resultLabel = makeScoreboardLabel(text: title, size: isLandscapeLayout ? 34 : 40)
         resultLabel.fontColor = winner == .player ? playerColor : enemyColor
         resultLabel.position = CGPoint(x: 0, y: isLandscapeLayout ? 58 : 88)
         resultLabel.zPosition = 1
         overlay.addChild(resultLabel)
-
         let finalScoreLabel = makeScoreboardLabel(text: "\(playerScore):\(enemyScore)", size: isLandscapeLayout ? 30 : 34)
         finalScoreLabel.alpha = 0.9
         finalScoreLabel.position = CGPoint(x: 0, y: isLandscapeLayout ? 12 : 28)
         finalScoreLabel.zPosition = 1
         overlay.addChild(finalScoreLabel)
-
         let playAgainButton = makeButton(
             title: "PLAY AGAIN",
             name: NodeName.playAgainButton,
@@ -1803,14 +1567,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         playAgainButton.zPosition = 1
         overlay.addChild(playAgainButton)
-
         let menuButton = makeButton(title: "Menu", name: NodeName.menuButton)
         menuButton.setScale(isLandscapeLayout ? 0.82 : 0.78)
         menuButton.alpha = 0.78
         menuButton.position = isLandscapeLayout ? CGPoint(x: 92, y: -58) : CGPoint(x: 0, y: -122)
         menuButton.zPosition = 1
         overlay.addChild(menuButton)
-
         overlay.setScale(0.92)
         overlay.alpha = 0
         overlay.run(.group([
@@ -1818,10 +1580,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             .scale(to: 1, duration: 0.3)
         ]))
     }
-
     private func showPauseMenu() {
         guard gameState == .playing else { return }
-
         isPaused = false
         gameState = .paused
         AppLogger.track(AppLogger.Event.gamePaused, properties: [
@@ -1830,7 +1590,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         ].merging(analyticsOrientation()) { _, new in new })
         physicsWorld.speed = 0
         pausedBallVelocity = ball?.physicsBody?.velocity
-
         let safeFrame = self.safeFrame
         let pauseOverlay = SKNode()
         pauseOverlay.name = "pauseOverlay"
@@ -1838,9 +1597,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         pauseOverlay.alpha = 0
         addChild(pauseOverlay)
         overlayNode = pauseOverlay
-
         createBlurredBackdrop(zPosition: 70)
-
         let cardHeight = isLandscapeLayout ? min(safeFrame.height - 32, 210) : 230
         let card = SKShapeNode(rectOf: CGSize(width: safeFrame.width - 48, height: cardHeight), cornerRadius: 28)
         card.fillColor = UIColor(white: 0.02, alpha: 0.9)
@@ -1848,22 +1605,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         card.lineWidth = 2
         card.position = CGPoint(x: safeFrame.midX, y: safeFrame.midY)
         pauseOverlay.addChild(card)
-
         let titleLabel = makeScoreboardLabel(text: "PAUSED", size: 38)
         titleLabel.fontColor = playerColor
         titleLabel.position = CGPoint(x: 0, y: 62)
         card.addChild(titleLabel)
-
         let resumeButton = makeButton(title: "RESUME", name: NodeName.resumeButton)
         resumeButton.position = CGPoint(x: 0, y: -18)
         card.addChild(resumeButton)
-
         let exitButton = makeButton(title: "EXIT", name: NodeName.exitButton)
         exitButton.setScale(0.78)
         exitButton.alpha = 0.78
         exitButton.position = CGPoint(x: 0, y: -82)
         card.addChild(exitButton)
-
         pauseOverlay.run(.sequence([
             .fadeIn(withDuration: 0.3),
             .run { [weak self] in
@@ -1871,7 +1624,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         ]))
     }
-
     private func resumeGame() {
         isPaused = false
         gameState = .playing
@@ -1880,7 +1632,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         launchBall(with: velocity)
         pausedBallVelocity = nil
     }
-
     @discardableResult
     private func createBlurredBackdrop(zPosition: CGFloat) -> SKEffectNode {
         let backdrop = SKEffectNode()
@@ -1889,24 +1640,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         backdrop.alpha = 0
         backdrop.filter = CIFilter(name: "CIGaussianBlur", parameters: [kCIInputRadiusKey: 12])
         backdrop.shouldRasterize = true
-
         if let texture = view?.texture(from: self) {
             let snapshot = SKSpriteNode(texture: texture)
             snapshot.size = size
             snapshot.position = CGPoint(x: frame.midX, y: frame.midY)
             backdrop.addChild(snapshot)
         }
-
         let dim = SKSpriteNode(color: UIColor(white: 0, alpha: 0.38), size: size)
         dim.position = CGPoint(x: frame.midX, y: frame.midY)
         dim.zPosition = 1
         backdrop.addChild(dim)
-
         addChild(backdrop)
         backdrop.run(.fadeIn(withDuration: 0.3))
         return backdrop
     }
-
     private func checkMatchOver() {
         if playerScore >= selectedScoreLimit {
             LocalLeaderboardStore.recordMatchEnd(
@@ -1924,36 +1671,27 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             showMatchOver(winner: .enemy)
         }
     }
-
     private func applyDifficultyIfNeeded(score: Int) {
         let difficultyStep = score / difficultyInterval
         guard difficultyStep > lastDifficultyStep else { return }
-
         lastDifficultyStep = difficultyStep
         increaseBallImpulse()
     }
-
     private func updateBackgroundIfNeeded(score: Int) {
         let backgroundStep = score / backgroundChangeInterval
         guard backgroundStep > lastBackgroundStep else { return }
-
         lastBackgroundStep = backgroundStep
-
         let color = backgroundColors[backgroundStep % backgroundColors.count]
         let colorize = SKAction.colorize(with: color, colorBlendFactor: 1, duration: 1.2)
         backgroundNode?.run(colorize, withKey: "backgroundColorize")
     }
-
     private func spawnObstacleIfNeeded(score: Int) {
         guard selectedGameMode == .powerUps else { return }
-
         let obstacleStep = score / obstacleInterval
         guard obstacleStep > lastObstacleStep else { return }
-
         lastObstacleStep = obstacleStep
         createObstacle()
     }
-
     private func createObstacle() {
         let safeFrame = self.safeFrame
         let obstacleSize = CGSize(width: 34, height: 34)
@@ -1962,7 +1700,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let minY = (paddle?.position.y ?? safeFrame.minY) + (isLandscapeLayout ? 72 : 120)
         let maxY = safeFrame.maxY - (isLandscapeLayout ? 64 : 90)
         guard minX < maxX, minY < maxY else { return }
-
         let obstacle = SKShapeNode(rectOf: obstacleSize, cornerRadius: 7)
         obstacle.fillColor = .white
         obstacle.strokeColor = .clear
@@ -1980,7 +1717,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         obstacle.physicsBody?.collisionBitMask = PhysicsCategory.ball
         obstacle.physicsBody?.contactTestBitMask = PhysicsCategory.ball
         addWorldChild(obstacle)
-
         let glow = SKShapeNode(rectOf: CGSize(width: obstacleSize.width + 18, height: obstacleSize.height + 18), cornerRadius: 11)
         glow.fillColor = .white
         glow.strokeColor = .clear
@@ -1988,7 +1724,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         glow.blendMode = .add
         glow.zPosition = -1
         obstacle.addChild(glow)
-
         obstacle.run(.repeatForever(.rotate(byAngle: .pi, duration: 1.1)), withKey: "spin")
         obstacle.run(.sequence([
             .wait(forDuration: 4.4),
@@ -1996,14 +1731,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             .removeFromParent()
         ]), withKey: "life")
     }
-
     private func increaseBallImpulse() {
         guard let physicsBody = ball?.physicsBody else { return }
-
         let velocity = physicsBody.velocity
         let currentSpeed = hypot(velocity.dx, velocity.dy)
         guard currentSpeed > 0 else { return }
-
         let maxSpeed: CGFloat = 760
         let newSpeed = min(currentSpeed * 1.08, maxSpeed)
         physicsBody.velocity = CGVector(
@@ -2011,7 +1743,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             dy: velocity.dy / currentSpeed * newSpeed
         )
     }
-
     private func showPaddleHitEffect(at position: CGPoint) {
         let emitter = SKEmitterNode()
         emitter.position = position
@@ -2032,13 +1763,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         emitter.particleColor = .white
         emitter.particleColorBlendFactor = 1
         addWorldChild(emitter)
-
         emitter.run(.sequence([
             .wait(forDuration: 0.45),
             .removeFromParent()
         ]))
     }
-
     private func showGoalConfetti() {
         let emitter = SKEmitterNode()
         emitter.position = CGPoint(x: safeFrame.midX, y: safeFrame.midY)
@@ -2064,13 +1793,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         emitter.particleColorBlendFactor = 1
         emitter.zPosition = 20
         addWorldChild(emitter)
-
         emitter.run(.sequence([
             .wait(forDuration: 1.15),
             .removeFromParent()
         ]))
     }
-
     private func makeBallTrail() -> SKEmitterNode {
         let trail = SKEmitterNode()
         trail.targetNode = worldNode ?? self
@@ -2091,7 +1818,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         trail.zPosition = -2
         return trail
     }
-
     private func makeParticleTexture() -> SKTexture {
         let size = CGSize(width: 8, height: 8)
         let image = UIGraphicsImageRenderer(size: size).image { context in
@@ -2100,7 +1826,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         return SKTexture(image: image)
     }
-
     private func makeTrailTexture() -> SKTexture {
         let size = CGSize(width: 6, height: 6)
         let image = UIGraphicsImageRenderer(size: size).image { context in
@@ -2109,7 +1834,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         return SKTexture(image: image)
     }
-
     private func makeConfettiTexture() -> SKTexture {
         let size = CGSize(width: 8, height: 4)
         let image = UIGraphicsImageRenderer(size: size).image { context in
@@ -2118,7 +1842,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         return SKTexture(image: image)
     }
-
     private func makeStarTexture() -> SKTexture {
         let size = CGSize(width: 4, height: 4)
         let image = UIGraphicsImageRenderer(size: size).image { context in
@@ -2127,16 +1850,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         return SKTexture(image: image)
     }
-
     func didBegin(_ contact: SKPhysicsContact) {
         guard gameState == .playing else { return }
-
         let categories = contact.bodyA.categoryBitMask | contact.bodyB.categoryBitMask
         guard categories & PhysicsCategory.ball != 0 else { return }
-
         if categories & PhysicsCategory.paddle != 0 {
             SoundManager.shared.playHitSound()
-
             if contactIncludes(contact, node: paddle) {
                 lastBallOwner = .player
                 ball?.lastTouchedBy = "Player"
@@ -2159,22 +1878,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             addRandomVelocityJitter()
         }
     }
-
     private func fieldObject(in contact: SKPhysicsContact) -> FieldObject? {
         if let object = contact.bodyA.node as? FieldObject {
             return object
         }
-
         return contact.bodyB.node as? FieldObject
     }
-
     private func handleFieldObjectHit(_ object: FieldObject, at contactPoint: CGPoint) {
         guard fieldObjects.contains(where: { $0 === object }) else { return }
-
         SoundManager.shared.playHitSound()
         applyFieldObjectEffect(object.objectType)
         showFieldObjectShatter(at: contactPoint, color: object.objectType.color)
-
         object.physicsBody?.categoryBitMask = 0
         object.physicsBody?.collisionBitMask = 0
         object.physicsBody?.contactTestBitMask = 0
@@ -2189,10 +1903,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             .removeFromParent()
         ]))
     }
-
     private func applyFieldObjectEffect(_ type: FieldObject.ObjectType) {
         let lastOwner = ball?.lastTouchedBy == "AI" ? BallOwner.enemy : BallOwner.player
-
         switch type {
         case .buff:
             applyBuff(to: lastOwner)
@@ -2203,7 +1915,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             pulseBackground(with: FieldObject.ObjectType.hazard.color)
         }
     }
-
     private func applyBuff(to owner: BallOwner) {
         switch owner {
         case .player:
@@ -2216,10 +1927,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             runBuffRecovery(for: .enemy)
         }
     }
-
     private func applyHazard(toOpponentOf owner: BallOwner) {
         let target: BallOwner = owner == .player ? .enemy : .player
-
         switch target {
         case .player:
             playerIsDebuffed = true
@@ -2231,7 +1940,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             runDebuffRecovery(for: .enemy)
         }
     }
-
     private func runBuffRecovery(for owner: BallOwner) {
         let actionKey = owner == .player ? "playerBuffRecovery" : "enemyBuffRecovery"
         removeAction(forKey: actionKey)
@@ -2242,7 +1950,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         ]), withKey: actionKey)
     }
-
     private func runDebuffRecovery(for owner: BallOwner) {
         let actionKey = owner == .player ? "playerDebuffRecovery" : "enemyDebuffRecovery"
         removeAction(forKey: actionKey)
@@ -2253,7 +1960,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         ]), withKey: actionKey)
     }
-
     private func clearHazardDebuff(for owner: BallOwner) {
         switch owner {
         case .player:
@@ -2261,10 +1967,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         case .enemy:
             enemyIsDebuffed = false
         }
-
         updatePaddleScale(for: owner)
     }
-
     private func clearBuff(for owner: BallOwner) {
         switch owner {
         case .player:
@@ -2272,20 +1976,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         case .enemy:
             enemyHasShield = false
         }
-
         updatePaddleScale(for: owner)
     }
-
     private func updatePaddleScale(for owner: BallOwner) {
         let hasShield = owner == .player ? playerHasShield : enemyHasShield
         let isDebuffed = owner == .player ? playerIsDebuffed : enemyIsDebuffed
         let targetXScale: CGFloat = (hasShield ? 1.25 : 1.0) * (isDebuffed ? 0.5 : 1.0)
         let paddleNode = owner == .player ? paddle : enemyPaddle
-
         paddleNode?.removeAction(forKey: "effectScale")
         paddleNode?.run(.scaleX(to: targetXScale, y: 1.0, duration: 0.18), withKey: "effectScale")
     }
-
     private func showFieldObjectShatter(at position: CGPoint, color: UIColor) {
         let emitter = SKEmitterNode()
         emitter.position = position
@@ -2306,19 +2006,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         emitter.particleColorBlendFactor = 1
         emitter.zPosition = 18
         addWorldChild(emitter)
-
         emitter.run(.sequence([
             .wait(forDuration: 0.55),
             .removeFromParent()
         ]))
     }
-
     private func contactIncludes(_ contact: SKPhysicsContact, node: SKNode?) -> Bool {
         guard let node else { return false }
-
         return contact.bodyA.node === node || contact.bodyB.node === node
     }
-
     private func setBallOwnerColor(_ owner: BallOwner) {
         let color = owner == .player ? playerColor : enemyColor
         ball?.fillColor = color
@@ -2326,7 +2022,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         (ball?.childNode(withName: "ballGlow") as? SKShapeNode)?.fillColor = color
         ballTrail?.particleColor = color
     }
-
     private func handlePaddleHit(at contactPoint: CGPoint, paddleNode: SKNode?, appliesPlayerSpin: Bool) {
         showPaddleHitEffect(at: contactPoint)
         playBallSquash()
@@ -2335,9 +2030,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         pulseBackground(with: appliesPlayerSpin ? playerColor : enemyColor)
         lightImpactFeedback.impactOccurred()
         lightImpactFeedback.prepare()
-
         guard appliesPlayerSpin else { return }
-
         run(.sequence([
             .wait(forDuration: 0.01),
             .run { [weak self] in
@@ -2345,10 +2038,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         ]))
     }
-
     private func playPlatformRecoil(_ paddleNode: SKNode?) {
         guard let paddleNode else { return }
-
         let baseXScale = paddleNode.xScale
         let baseYScale = paddleNode.yScale
         paddleNode.removeAction(forKey: "recoil")
@@ -2357,13 +2048,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             .scaleX(to: baseXScale, y: baseYScale, duration: 0.09)
         ]), withKey: "recoil")
     }
-
     private func screenShake(intensity: CGFloat = 5) {
         guard let worldNode else { return }
-
         worldNode.removeAction(forKey: "screenShake")
         worldNode.position = .zero
-
         let shake = SKAction.sequence([
             .moveBy(x: intensity, y: -intensity * 0.6, duration: 0.025),
             .moveBy(x: -intensity * 1.8, y: intensity, duration: 0.035),
@@ -2373,35 +2061,27 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         ])
         worldNode.run(shake, withKey: "screenShake")
     }
-
     private func playScreenShake() {
         screenShake()
     }
-
     private func applyPaddleInfluence(contactPoint: CGPoint) {
         guard gameState == .playing else { return }
         guard let ballBody = ball?.physicsBody, let paddle else { return }
-
         let hitOffset = (contactPoint.x - paddle.position.x) / (paddleSize.width / 2)
         let clampedOffset = min(max(hitOffset, -1), 1)
         let edgeBoost = clampedOffset * 210
         let clampedPaddleVelocity = min(max(paddleVelocityX, -maxPaddleSpinVelocity), maxPaddleSpinVelocity)
         let spinBoost = clampedPaddleVelocity * paddleSpinTransfer
-
         var velocity = ballBody.velocity
         velocity.dx += edgeBoost + spinBoost
-
         let spinRatio = min(abs(clampedPaddleVelocity) / maxPaddleSpinVelocity, 1)
         let minimumVerticalSpeed = 150 + (1 - spinRatio) * 100
         velocity.dy = max(abs(velocity.dy) * (1 - spinRatio * 0.35), minimumVerticalSpeed)
-
         ballBody.velocity = limitedVelocity(velocity)
         addRandomVelocityJitter()
     }
-
     private func addRandomVelocityJitter() {
         guard let physicsBody = ball?.physicsBody else { return }
-
         let angle = CGFloat.random(in: 1...2) * (Bool.random() ? 1 : -1) * .pi / 180
         let velocity = physicsBody.velocity
         let rotatedVelocity = CGVector(
@@ -2410,10 +2090,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         )
         physicsBody.velocity = limitedVelocity(rotatedVelocity)
     }
-
     private func playBallSquash() {
         guard let ball else { return }
-
         ball.removeAction(forKey: "stretch")
         ball.run(.sequence([
             .scaleX(to: 1.22, y: 0.72, duration: 0.05),
@@ -2421,36 +2099,29 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             .scale(to: 1.0, duration: 0.08)
         ]), withKey: "squash")
     }
-
     private func updateBallStretch() {
         guard let ball, let physicsBody = ball.physicsBody else { return }
         guard ball.action(forKey: "squash") == nil else { return }
-
         let velocity = physicsBody.velocity
         let speed = hypot(velocity.dx, velocity.dy)
         let stretchAmount = min(max((speed - 280) / 620, 0), 1)
         let xScale = 1.0 - stretchAmount * 0.12
         let yScale = 1.0 + stretchAmount * 0.18
         let angle = atan2(velocity.dy, velocity.dx) - .pi / 2
-
         ball.run(.group([
             .scaleX(to: xScale, y: yScale, duration: 0.08),
             .rotate(toAngle: angle, duration: 0.08, shortestUnitArc: true)
         ]), withKey: "stretch")
     }
-
     private func updateBallTrail() {
         guard let trail = ballTrail, let velocity = ball?.physicsBody?.velocity else { return }
-
         let speed = hypot(velocity.dx, velocity.dy)
         trail.particleBirthRate = 45 + speed * 0.05
         trail.emissionAngle = atan2(-velocity.dy, -velocity.dx)
     }
-
     private func limitedVelocity(_ velocity: CGVector) -> CGVector {
         let speed = hypot(velocity.dx, velocity.dy)
         guard speed > 0 else { return velocity }
-
         let minSpeed: CGFloat = 280
         let maxSpeed: CGFloat = 840
         let targetSpeed = min(max(speed, minSpeed), maxSpeed)
@@ -2459,7 +2130,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             dy: velocity.dy / speed * targetSpeed
         )
     }
-
     private func handleSettingsTap(at scenePoint: CGPoint) {
         let touchedNode = atPoint(scenePoint)
         if let button = buttonNode(from: touchedNode, named: NodeName.backButton) {
@@ -2516,7 +2186,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
     }
-
     private func handleLeaderboardTap(at scenePoint: CGPoint) {
         let touchedNode = atPoint(scenePoint)
         if let button = buttonNode(from: touchedNode, named: NodeName.backButton) {
@@ -2527,12 +2196,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
     }
-
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first else { return }
-
         let location = touch.location(in: self)
-
         if gameState == .start {
             let touchedNode = atPoint(location)
             if let button = buttonNode(from: touchedNode, named: NodeName.playButton) {
@@ -2596,11 +2262,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
     }
-
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first else { return }
         let loc = touch.location(in: self)
-
         if gameState == .settings, let began = settingsPanBegan {
             if settingsDragActive || abs(loc.y - began.y) > 8 {
                 if !settingsDragActive {
@@ -2625,11 +2289,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             updatePaddleTarget(toX: loc.x, timestamp: touch.timestamp)
         }
     }
-
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first else { return }
         let end = touch.location(in: self)
-
         if gameState == .settings {
             let began = settingsPanBegan ?? end
             settingsPanBegan = nil
@@ -2643,7 +2305,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
             return
         }
-
         if gameState == .leaderboard {
             let began = leaderboardPanBegan ?? end
             leaderboardPanBegan = nil
@@ -2658,14 +2319,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             return
         }
     }
-
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         settingsPanBegan = nil
         settingsDragActive = false
         leaderboardPanBegan = nil
         leaderboardDragActive = false
     }
-
     private func setNotificationsEnabledFromPicker(_ enabled: Bool) {
         if enabled == notificationsEnabled { return }
         notificationsEnabled = enabled
@@ -2680,11 +2339,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
     }
-
     private func changeDifficulty(by offset: Int) {
         let difficulties = AIDifficulty.allCases
         guard let currentIndex = difficulties.firstIndex(of: selectedDifficulty) else { return }
-
         let newIndex = (currentIndex + offset + difficulties.count) % difficulties.count
         selectedDifficulty = difficulties[newIndex]
         difficultyValueLabel?.text = selectedDifficulty.title
@@ -2694,11 +2351,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             "value": selectedDifficulty.title
         ])
     }
-
     private func changeGameMode(by offset: Int) {
         let modes = GameMode.allCases
         guard let currentIndex = modes.firstIndex(of: selectedGameMode) else { return }
-
         let newIndex = (currentIndex + offset + modes.count) % modes.count
         selectedGameMode = modes[newIndex]
         gameModeValueLabel?.text = selectedGameMode.title
@@ -2708,20 +2363,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             "value": selectedGameMode.title
         ])
     }
-
     private func openPolicyPage(title: String, url: URL) {
         guard let viewController = view?.window?.rootViewController else { return }
-
         let policyViewController = PolicyWebViewController(title: title, url: url)
         let navigationController = UINavigationController(rootViewController: policyViewController)
         navigationController.modalPresentationStyle = .fullScreen
         viewController.present(navigationController, animated: true)
     }
-
     private func refreshProfileSettingsUI() {
         profileCardHandles?.refreshFromStore()
     }
-
     private func presentPhotoSourceSheet(from presenter: UIViewController) {
         let sheet = UIAlertController(title: "Profile photo", message: nil, preferredStyle: .actionSheet)
         sheet.addAction(UIAlertAction(title: "Photo library", style: .default) { [weak self] _ in
@@ -2762,7 +2413,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         presenter.present(sheet, animated: true)
     }
-
     private func startProfilePhotoFlow(host: UIViewController, start: (PlayerProfilePhotoPickerCoordinator) -> Void) {
         let coordinator = PlayerProfilePhotoPickerCoordinator(host: host) { [weak self] in
             self?.profilePhotoCoordinator = nil
@@ -2772,12 +2422,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         profilePhotoCoordinator = coordinator
         start(coordinator)
     }
-
     private func openProfileEditor() {
         guard let root = view?.window?.rootViewController else { return }
         let presenter = Self.topPresentedViewController(startingFrom: root)
         AppLogger.track(AppLogger.Event.profileEditorOpened)
-
         let alert = UIAlertController(
             title: "Profile",
             message: "Saved on this device only.",
@@ -2814,67 +2462,53 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         })
         presenter.present(alert, animated: true)
     }
-
     private static func topPresentedViewController(startingFrom root: UIViewController) -> UIViewController {
         if let presented = root.presentedViewController {
             return topPresentedViewController(startingFrom: presented)
         }
         return root
     }
-
     private func updatePaddleTarget(toX xPosition: CGFloat, timestamp: TimeInterval) {
         let halfWidth = paddleSize.width / 2
         targetPaddleX = min(max(xPosition, safeFrame.minX + halfWidth), safeFrame.maxX - halfWidth)
         lastPaddleMoveTime = timestamp
     }
-
     private func updatePlayerPaddle(deltaTime: TimeInterval) {
         guard let paddle, let targetPaddleX else { return }
-
         let previousX = paddle.position.x
         let newX = previousX + (targetPaddleX - previousX) * paddleLerpFactor
         paddle.position.x = newX
-
         let safeDeltaTime = max(deltaTime, 0.001)
         paddleVelocityX = (newX - previousX) / CGFloat(safeDeltaTime)
         lastPaddleX = newX
     }
-
     private func updatePaddleVelocityDecay(currentTime: TimeInterval) {
         guard lastPaddleMoveTime > 0 else { return }
-
         if currentTime - lastPaddleMoveTime > 0.12 {
             paddleVelocityX *= 0.85
         }
-
         if abs(paddleVelocityX) < 8 {
             paddleVelocityX = 0
         }
     }
-
     private func updateEnemyPaddle(deltaTime: TimeInterval) {
         guard let enemyPaddle, let ball else { return }
-
         let halfWidth = enemyPaddleSize.width / 2
         let targetX = min(max(ball.position.x, safeFrame.minX + halfWidth), safeFrame.maxX - halfWidth)
         let distance = targetX - enemyPaddle.position.x
         let maxStep = selectedDifficulty.enemySpeed * CGFloat(deltaTime)
         enemyPaddle.position.x += min(max(distance, -maxStep), maxStep)
     }
-
     private var playerGoalLine: CGFloat {
         let paddleY = paddle?.position.y ?? safeFrame.minY + paddleBottomOffset
         return paddleY - paddleSize.height / 2 - ballRadius * 0.35
     }
-
     private var enemyGoalLine: CGFloat {
         let enemyPaddleY = enemyPaddle?.position.y ?? safeFrame.maxY - enemyPaddleTopOffset
         return enemyPaddleY + enemyPaddleSize.height / 2 + ballRadius * 0.35
     }
-
     private func handleGoalIfNeeded() {
         guard let ball else { return }
-
         if ball.position.y > enemyGoalLine {
             playerScore += 1
             SoundManager.shared.playScoreSound()
@@ -2884,7 +2518,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             heavyImpactFeedback.prepare()
             updateScoreLabel()
             checkMatchOver()
-
             if gameState == .playing {
                 resetBallAfterGoal(directionY: -1)
             }
@@ -2897,16 +2530,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             heavyImpactFeedback.prepare()
             updateScoreLabel()
             checkMatchOver()
-
             if gameState == .playing {
                 resetBallAfterGoal(directionY: 1)
             }
         }
     }
-
     private func resetBallAfterGoal(directionY: CGFloat) {
         guard let ball, let physicsBody = ball.physicsBody else { return }
-
         ball.removeAllActions()
         ball.setScale(1)
         ball.zRotation = 0
@@ -2915,30 +2545,24 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setBallOwnerColor(directionY > 0 ? .player : .enemy)
         ball.lastTouchedBy = directionY > 0 ? "Player" : "AI"
         schedulePowerUpsIfNeeded()
-
         let speed: CGFloat = 340
         let angle = CGFloat.random(in: 35...145) * .pi / 180
         let nextVelocity = CGVector(dx: cos(angle) * speed, dy: abs(sin(angle) * speed) * directionY)
         physicsBody.velocity = .zero
         physicsBody.angularVelocity = 0
-
         launchBall(with: nextVelocity)
     }
-
     override func update(_ currentTime: TimeInterval) {
         guard gameState == .playing else { return }
         guard !isCountingDown else {
             lastUpdateTime = currentTime
             return
         }
-
         if startTime == 0 {
             startTime = currentTime
         }
-
         let deltaTime = lastUpdateTime == 0 ? 0 : currentTime - lastUpdateTime
         lastUpdateTime = currentTime
-
         currentScore = Int(currentTime - startTime)
         applyDifficultyIfNeeded(score: currentScore)
         updateBackgroundIfNeeded(score: currentScore)
@@ -2949,7 +2573,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         updateBallStretch()
         updateBallTrail()
         handleGoalIfNeeded()
-
         currentScore = Int(currentTime - startTime)
     }
 }

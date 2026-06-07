@@ -1,9 +1,6 @@
 import UIKit
 import AppsFlyerLib
-
-/// Проброс URL / Universal Links в AppsFlyer (OneLink / UDL). Associated Domains в entitlements должны совпадать с шаблоном OneLink.
 enum AppsFlyerDeepLinkRouting {
-
     @discardableResult
     static func application(
         _ application: UIApplication,
@@ -13,7 +10,6 @@ enum AppsFlyerDeepLinkRouting {
         AppsFlyerLib.shared().handleOpen(url, options: options)
         return true
     }
-
     @discardableResult
     static func application(
         _ application: UIApplication,

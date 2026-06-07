@@ -1,15 +1,11 @@
 import FirebaseMessaging
 import UIKit
 import UserNotifications
-
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
-
     var window: UIWindow?
-
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         UNUserNotificationCenter.current().delegate = PushNotificationCenterDelegate.shared
-
         if let remote = launchOptions?[.remoteNotification] as? [AnyHashable: Any],
            let urlString = PushUserInfoExtractor.urlString(from: remote) {
             PendingPushURLStore.pendingURLString = urlString
@@ -17,15 +13,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                 PushNotificationRouting.markColdStartPushURL(url)
             }
         }
-
         if let url = launchOptions?[.url] as? URL {
             AppsFlyerDeepLinkRouting.application(application, open: url)
         }
-
         AppBootstrap.performLaunch(launchOptions: launchOptions)
         return true
     }
-
     func application(
         _ app: UIApplication,
         open url: URL,
@@ -33,7 +26,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     ) -> Bool {
         AppsFlyerDeepLinkRouting.application(app, open: url, options: options)
     }
-
     func application(
         _ application: UIApplication,
         continue userActivity: NSUserActivity,
@@ -45,19 +37,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             restorationHandler: restorationHandler
         )
     }
-
     func applicationDidBecomeActive(_ application: UIApplication) {
         AppForegroundCoordinator.applicationDidBecomeActive()
     }
-
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         NotificationsApplicationHook.didRegister(deviceToken: deviceToken)
     }
-
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
         NotificationsApplicationHook.registrationDidFail(error: error)
     }
-
     func application(
         _ application: UIApplication,
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
