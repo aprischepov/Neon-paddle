@@ -50,9 +50,9 @@ enum ApplicationFlowResolver {
         }
     }
     static func installWrapperRoot(in window: UIWindow) {
-        guard let game = makeGameViewController() else { return }
+        let menu = MainMenuFlowController.makeRootViewController()
         UIView.transition(with: window, duration: 0.35, options: .transitionCrossDissolve) {
-            window.rootViewController = game
+            window.rootViewController = menu
         } completion: { _ in
             PushNotificationRouting.flushPendingIfPossible()
         }

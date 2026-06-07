@@ -67,6 +67,7 @@ enum LocalLeaderboardStore {
         switch raw {
         case 0: return "Classic"
         case 1: return "Power-Ups"
+        case 2: return "2 Players"
         default: return "—"
         }
     }
@@ -82,7 +83,13 @@ enum LocalLeaderboardStore {
             let date = Date(timeIntervalSince1970: e.recordedAt)
             let ds = rowDateFormatter.string(from: date)
             let diff = difficultyTitle(raw: e.difficultyRaw)
-            let modeShort = e.gameModeRaw == 0 ? "CL" : "PU"
+            let modeShort: String
+            switch e.gameModeRaw {
+            case 0: modeShort = "CL"
+            case 1: modeShort = "PU"
+            case 2: modeShort = "2P"
+            default: modeShort = "—"
+            }
             let res = e.playerWon ? "WIN" : "LOSS"
             return "\(ds)  \(diff)/\(modeShort)  \(res)  +\(e.pointsEarned)"
         }

@@ -14,7 +14,9 @@ fi
 echo "⬇️  Забираю игровые файлы из store-clean..."
 
 git checkout store-clean -- \
-  game_2/GameScene.swift \
+  game_2/Game \
+  game_2/UI \
+  game_2/Campaign \
   game_2/GameViewController.swift \
   game_2/PolicyWebViewController.swift \
   game_2/AppConstants.swift \

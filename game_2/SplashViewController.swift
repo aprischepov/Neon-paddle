@@ -160,14 +160,9 @@ final class SplashViewController: UIViewController {
         didFinishSplash = true
         setSpinnerVisible(false)
         guard let window = view.window else { return }
-        let storyboard = UIStoryboard(name: "Main", bundle: nil)
-        guard let gameVC = storyboard.instantiateViewController(withIdentifier: "GameViewController") as? GameViewController else {
-            AppLogger.warning("Failed to instantiate GameViewController from storyboard")
-            return
-        }
         AppLogger.track(AppLogger.Event.splashTransition, properties: ["variant": "A"])
         UIView.transition(with: window, duration: 0.35, options: .transitionCrossDissolve) {
-            window.rootViewController = gameVC
+            window.rootViewController = MainMenuFlowController.makeRootViewController()
         }
     }
     private func teardownABObservers() {
