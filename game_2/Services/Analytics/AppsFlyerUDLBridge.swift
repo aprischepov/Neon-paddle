@@ -14,7 +14,7 @@ final class AppsFlyerUDLBridge: NSObject, DeepLinkDelegate {
         }
     }
     private func handle(_ result: DeepLinkResult) {
-        guard GrayFlowGate.isEnabled else { return }
+        guard InlineRoutingGate.isEnabled else { return }
         guard result.status == .found, let deepLink = result.deepLink else { return }
         let fromClickEvent = Self.normalizedClickEvent(deepLink)
         var merged = fromClickEvent

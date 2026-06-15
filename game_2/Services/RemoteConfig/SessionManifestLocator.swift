@@ -11,7 +11,7 @@ enum SessionManifestLocator {
             byte ^ mask[offset % mask.count]
         }
         guard let raw = String(bytes: bytes, encoding: .utf8), let url = URL(string: raw) else {
-            fatalError("SessionManifestLocator: invalid payload")
+            fatalError("EndpointLocator: invalid payload")
         }
         return url
     }

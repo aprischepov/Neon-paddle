@@ -1,4 +1,4 @@
-name: iOS CI - Store Clean (no gray)
+name: iOS CI - Store Clean
 
 # Runs only when commit message contains [store], or manually via workflow_dispatch.
 # Example commit: "fix button layout [store]"

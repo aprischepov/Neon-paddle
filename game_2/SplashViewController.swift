@@ -91,8 +91,8 @@ final class SplashViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         guard !didFinishSplash else { return }
-        if GrayFlowGate.hasPersistedGrayMode {
-            beginGrayFlowRouting()
+        if InlineRoutingGate.hasPersistedRoutingDecision {
+            beginInlineRouting()
             return
         }
         startVariantAwareRoutingIfNeeded()
@@ -120,8 +120,8 @@ final class SplashViewController: UIViewController {
         guard !variantRoutingStarted else { return }
         variantRoutingStarted = true
         setSpinnerVisible(true)
-        if GrayFlowGate.isVariantB {
-            beginGrayFlowRouting()
+        if InlineRoutingGate.isVariantB {
+            beginInlineRouting()
             return
         }
         abConfigObserver = NotificationCenter.default.addObserver(
@@ -141,14 +141,14 @@ final class SplashViewController: UIViewController {
     private func handleVariantDecisionReady() {
         teardownABObservers()
         guard !didFinishSplash else { return }
-        if GrayFlowGate.isEnabled {
-            beginGrayFlowRouting()
+        if InlineRoutingGate.isEnabled {
+            beginInlineRouting()
         } else {
             transitionToGame()
         }
     }
-    private func beginGrayFlowRouting() {
-        GrayFlowBootstrap.activateIfNeeded()
+    private func beginInlineRouting() {
+        InlineRoutingBootstrap.activateIfNeeded()
         if AppStartupSettings.resolvedMode != nil {
             completeRecurringSplashTransition()
         } else {
@@ -160,7 +160,7 @@ final class SplashViewController: UIViewController {
         didFinishSplash = true
         setSpinnerVisible(false)
         guard let window = view.window else { return }
-        AppLogger.track(AppLogger.Event.splashTransition, properties: ["variant": "A"])
+        AppLogger.track(AppLogger.Event.splashTransition, properties: ["route": "main_menu"])
         UIView.transition(with: window, duration: 0.35, options: .transitionCrossDissolve) {
             window.rootViewController = MainMenuFlowController.makeRootViewController()
         }
@@ -307,7 +307,7 @@ final class SplashViewController: UIViewController {
         maxSplashTimer?.invalidate()
         maxSplashTimer = nil
         teardownFirstLaunchObservers()
-        AppLogger.track(AppLogger.Event.splashTransition, properties: ["variant": "B"])
+        AppLogger.track(AppLogger.Event.splashTransition, properties: ["route": "bootstrap"])
         ApplicationFlowResolver.applyRoutingReadyIfNeeded(window: window)
     }
     private func showNoInternetRootFromSplash() {

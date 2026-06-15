@@ -55,16 +55,12 @@ final class ABTestingService {
             }
             let variant = self.string(for: .appVariant) ?? "nil"
             AppLogger.debug(
-                "[RemoteConfig] fetch SUCCESS — status=\(statusName)  SplashScreenTest=\(variant)",
-                category: "ABTesting"
-            )
-            AppLogger.debug(
-                "[RemoteConfig] → AppsFlyer attribution will \(variant.uppercased() == "B" ? "RUN ✅" : "be SKIPPED ⛔️") (variant=\(variant))",
+                "[RemoteConfig] fetch SUCCESS — status=\(statusName)",
                 category: "ABTesting"
             )
             AppLogger.track("ab_config_fetched", properties: [
                 "status": statusName,
-                "SplashScreenTest": variant
+                "app_variant": variant
             ])
             NotificationCenter.default.post(name: .abTestingConfigDidUpdate, object: nil)
             completion?(nil)

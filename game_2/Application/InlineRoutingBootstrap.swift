@@ -1,11 +1,11 @@
 import Foundation
-enum GrayFlowBootstrap {
+enum InlineRoutingBootstrap {
     private static var didActivate = false
     static func activateIfNeeded() {
-        guard GrayFlowGate.isEnabled else { return }
+        guard InlineRoutingGate.isEnabled else { return }
         guard !didActivate else { return }
         didActivate = true
-        AppLogger.debug("[GrayFlow] activating post-attribution coordinators", category: "GrayFlow")
+        AppLogger.debug("[Bootstrap] activating post-attribution coordinators", category: "Bootstrap")
         OfflineSurfaceCoordinator.start()
         AppStartupDecisionCoordinator.shared.start()
         RemoteConfigCoordinator.shared.start()

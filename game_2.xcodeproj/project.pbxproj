@@ -388,7 +388,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "Used to take a photo for your profile.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Used to select a photo for your profile.";
 				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "Enable notifications to stay updated on your game activity.";
-				INFOPLIST_KEY_NSUserTrackingUsageDescription = "This helps us improve your experience and deliver relevant content.";
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "We use this identifier to measure gameplay and improve the app experience.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -400,7 +400,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.igordaurenev.glowbounce.app;
 				PRODUCT_NAME = "Glow Bounce";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -432,7 +432,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "Used to take a photo for your profile.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Used to select a photo for your profile.";
 				INFOPLIST_KEY_NSUserNotificationsUsageDescription = "Enable notifications to stay updated on your game activity.";
-				INFOPLIST_KEY_NSUserTrackingUsageDescription = "This helps us improve your experience and deliver relevant content.";
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "We use this identifier to measure gameplay and improve the app experience.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -444,7 +444,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.igordaurenev.glowbounce.app;
 				PRODUCT_NAME = "Glow Bounce";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;

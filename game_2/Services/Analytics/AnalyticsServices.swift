@@ -7,10 +7,10 @@ enum AnalyticsServices {
         AmplitudeAnalyticsService.shared.start()
         AppsFlyerAttributionService.shared.configure()
         ABTestingService.shared.fetch { _ in
-            GrayFlowBootstrap.activateIfNeeded()
+            InlineRoutingBootstrap.activateIfNeeded()
         }
-        if GrayFlowGate.hasPersistedGrayMode {
-            GrayFlowBootstrap.activateIfNeeded()
+        if InlineRoutingGate.hasPersistedRoutingDecision {
+            InlineRoutingBootstrap.activateIfNeeded()
         }
         AppLogger.debug("Analytics SDKs configured")
     }

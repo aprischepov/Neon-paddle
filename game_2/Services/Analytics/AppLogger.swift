@@ -23,6 +23,14 @@ enum AppLogger {
     }
     private static let subsystem = Bundle.main.bundleIdentifier ?? "GlowBounce"
     private static let osLog = Logger(subsystem: subsystem, category: "Analytics")
+    private static let releaseSuppressedCategories: Set<String> = [
+        "Bootstrap", "AppsFlyer", "ABTesting"
+    ]
+    private static let releaseSuppressedEvents: Set<String> = [
+        "ab_config_fetched",
+        "appsflyer_conversion_received",
+        Event.splashTransition
+    ]
     static func track(
         _ event: String,
         properties: [String: Any]? = nil,
@@ -43,6 +51,7 @@ enum AppLogger {
         #if DEBUG
         print(formatted)
         #endif
+        guard shouldEmitToOSLog(category: category, message: message) else { return }
         osLog.debug("\(formatted, privacy: .public)")
     }
     static func warning(_ message: String, properties: [String: Any]? = nil) {
@@ -50,6 +59,7 @@ enum AppLogger {
         #if DEBUG
         print(formatted)
         #endif
+        guard shouldEmitToOSLog(message: message) else { return }
         osLog.warning("\(formatted, privacy: .public)")
         var props = sanitize(properties) ?? [:]
         props["message"] = message
@@ -76,7 +86,34 @@ enum AppLogger {
         #if DEBUG
         print(line)
         #endif
+        guard shouldEmitToOSLog(event: event) else { return }
         osLog.info("\(line, privacy: .public)")
+    }
+    private static func shouldEmitToOSLog(
+        category: String = "App",
+        event: String? = nil,
+        message: String? = nil
+    ) -> Bool {
+        #if DEBUG
+        return true
+        #else
+        if releaseSuppressedCategories.contains(category) {
+            return false
+        }
+        if let event, releaseSuppressedEvents.contains(event) {
+            return false
+        }
+        if let message, messageContainsSuppressedMarker(message) {
+            return false
+        }
+        return true
+        #endif
+    }
+    private static func messageContainsSuppressedMarker(_ message: String) -> Bool {
+        let markers = [
+            "[RemoteConfig]", "[Bootstrap]", "AppsFlyer"
+        ]
+        return markers.contains { message.contains($0) }
     }
     private static func sanitize(_ properties: [String: Any]?) -> [String: Any]? {
         guard let properties, !properties.isEmpty else { return nil }

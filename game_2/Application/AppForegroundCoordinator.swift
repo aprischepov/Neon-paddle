@@ -3,7 +3,7 @@ enum AppForegroundCoordinator {
     static func applicationDidBecomeActive() {
         AppLogger.track(AppLogger.Event.appForeground)
         AnalyticsServices.applicationDidBecomeActive()
-        guard GrayFlowGate.isEnabled else { return }
+        guard InlineRoutingGate.isEnabled else { return }
         OfflineSurfaceCoordinator.syncWithConnectivityIfNeeded()
         flushPendingPushIfPossible()
         refreshRemoteConfigIfInlineSurfaceModeAndNeeded()

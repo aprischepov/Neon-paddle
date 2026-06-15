@@ -43,18 +43,11 @@ final class AppsFlyerAttributionService: NSObject {
         ABTestingService.shared.string(for: .appVariant)?.uppercased() == "B"
     }
     private func applyConversionSuccess(_ raw: [AnyHashable: Any]) {
-        let variant = ABTestingService.shared.string(for: .appVariant) ?? "nil"
         guard isVariantB else {
-            AppLogger.debug(
-                "[AppsFlyer] onConversionDataSuccess received — SKIPPED ⛔️ (SplashScreenTest=\(variant))",
-                category: "AppsFlyer"
-            )
+            AppLogger.debug("AppsFlyer: conversion callback ignored", category: "AppsFlyer")
             return
         }
-        AppLogger.debug(
-            "[AppsFlyer] onConversionDataSuccess received — PROCESSING ✅ (SplashScreenTest=\(variant))",
-            category: "AppsFlyer"
-        )
+        AppLogger.debug("AppsFlyer: conversion callback applied", category: "AppsFlyer")
         let normalized = AppsFlyerConversionPayload.normalized(from: raw)
         let incoming   = AppsFlyerConversionPayload.sanitizedAttributionPayload(normalized)
         guard AppsFlyerConversionPayload.isSubstantiveAttributionPayload(incoming) else {
@@ -103,7 +96,7 @@ final class AppsFlyerAttributionService: NSObject {
             deadline: .now() + AppsFlyerInstallAttribution.deferredInstallConversionRefreshDelay,
             execute: work
         )
-        AppLogger.debug("AppsFlyer: deferred refresh scheduled (Organic first launch)", category: "AppsFlyer")
+        AppLogger.debug("AppsFlyer: deferred refresh scheduled", category: "AppsFlyer")
     }
     private func performDeferredRefresh() {
         deferredInstallConversionRefreshWorkItem = nil
