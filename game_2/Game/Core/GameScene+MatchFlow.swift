@@ -288,11 +288,18 @@ extension GameScene {
     func checkMatchOver() {
         if playerScore >= selectedScoreLimit {
             recordLeaderboardIfNeeded(playerWon: true)
+            registerMatchAchievements(playerWon: true)
             showMatchOver(winner: .player)
         } else if enemyScore >= selectedScoreLimit {
             recordLeaderboardIfNeeded(playerWon: false)
+            registerMatchAchievements(playerWon: false)
             showMatchOver(winner: .enemy)
         }
+    }
+
+    func registerMatchAchievements(playerWon: Bool) {
+        guard campaignLevel == nil else { return }
+        AchievementStore.registerMatchResult(gameMode: matchGameMode, playerWon: playerWon)
     }
 
     func recordLeaderboardIfNeeded(playerWon: Bool) {

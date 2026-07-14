@@ -5,6 +5,7 @@ final class MainMenuViewController: UIViewController {
     private let titleLabel = MainMenuStyling.makeTitleLabel("GLOW BOUNCE", size: 40)
     private let playButton = MainMenuStyling.makeOutlineButton(title: "PLAY")
     private let campaignButton = MainMenuStyling.makeOutlineButton(title: "CAMPAIGN")
+    private let achievementsButton = MainMenuStyling.makeOutlineButton(title: "ACHIEVEMENTS")
     private let leaderboardButton = MainMenuStyling.makeOutlineButton(title: "LEADERBOARD")
     private let settingsButton = MainMenuStyling.makeOutlineButton(title: "SETTINGS")
     private let buttonStack = UIStackView()
@@ -61,7 +62,7 @@ final class MainMenuViewController: UIViewController {
         buttonStack.axis = .vertical
         buttonStack.spacing = 14
         buttonStack.alignment = .fill
-        [playButton, campaignButton, leaderboardButton, settingsButton].forEach { buttonStack.addArrangedSubview($0) }
+        [playButton, campaignButton, achievementsButton, leaderboardButton, settingsButton].forEach { buttonStack.addArrangedSubview($0) }
         view.addSubview(titleLabel)
         view.addSubview(buttonStack)
         let safe = view.safeAreaLayoutGuide
@@ -73,7 +74,7 @@ final class MainMenuViewController: UIViewController {
             buttonStack.widthAnchor.constraint(lessThanOrEqualTo: safe.widthAnchor, constant: -48),
             buttonStack.widthAnchor.constraint(lessThanOrEqualToConstant: 320),
         ])
-        [playButton, campaignButton, leaderboardButton, settingsButton].forEach {
+        [playButton, campaignButton, achievementsButton, leaderboardButton, settingsButton].forEach {
             $0.widthAnchor.constraint(equalTo: buttonStack.widthAnchor).isActive = true
         }
     }
@@ -81,6 +82,7 @@ final class MainMenuViewController: UIViewController {
     private func wireActions() {
         playButton.addTarget(self, action: #selector(playTapped), for: .touchUpInside)
         campaignButton.addTarget(self, action: #selector(campaignTapped), for: .touchUpInside)
+        achievementsButton.addTarget(self, action: #selector(achievementsTapped), for: .touchUpInside)
         leaderboardButton.addTarget(self, action: #selector(leaderboardTapped), for: .touchUpInside)
         settingsButton.addTarget(self, action: #selector(settingsTapped), for: .touchUpInside)
     }
@@ -93,6 +95,11 @@ final class MainMenuViewController: UIViewController {
     @objc private func campaignTapped() {
         AppLogger.track(AppLogger.Event.buttonTap, properties: ["button": "campaign", "screen": "main_menu"])
         navigationController?.pushViewController(CampaignViewController(), animated: true)
+    }
+
+    @objc private func achievementsTapped() {
+        AppLogger.track(AppLogger.Event.buttonTap, properties: ["button": "achievements", "screen": "main_menu"])
+        navigationController?.pushViewController(AchievementsViewController(), animated: true)
     }
 
     @objc private func leaderboardTapped() {

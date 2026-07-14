@@ -35,6 +35,7 @@ extension GameScene {
         let stars = campaignStarsForCurrentResult(playerWon: playerWon)
         if playerWon {
             CampaignProgressStore.recordWin(levelID: level.id, stars: stars)
+            AchievementStore.registerCampaignResult()
         }
         gameDelegate?.gameSceneDidFinishCampaignLevel(
             self,
